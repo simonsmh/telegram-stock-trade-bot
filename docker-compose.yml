@@ -1,0 +1,11 @@
+services:
+  stock-bot:
+    build: .
+    container_name: stock-trade-bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - POLL_INTERVAL=${POLL_INTERVAL:-60}
+    volumes:
+      # 持久化用户配置数据
+      - ./data:/app/data
