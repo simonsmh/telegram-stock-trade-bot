@@ -213,7 +213,7 @@ class StockMonitor:
         logger.info(f"轮询完成，检查了 {len(tasks)} 个任务")
 
 
-async def main():
+if __name__ == "__main__":
     """主函数"""
     # 检查Token
     token = get_bot_token()
@@ -253,16 +253,7 @@ async def main():
     # 替换 post_init
     app.post_init = post_init_with_jobs
     
-    # 启动
+    # 启动 (run_polling 内部会处理事件循环)
     logger.info(f"🚀 Bot启动中... 轮询间隔: {get_poll_interval()}秒")
     app.run_polling()
-
-
-def run():
-    """入口函数"""
-    asyncio.run(main())
-
-
-if __name__ == "__main__":
-    run()
 
