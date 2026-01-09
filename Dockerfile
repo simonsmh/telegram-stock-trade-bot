@@ -27,12 +27,16 @@ FROM python:3.14-slim-trixie
 # Python executable must be the same, e.g., using `python:3.11-slim-bookworm`
 # will fail.
 
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && apt-get clean
 # Copy the application from the builder
 COPY --from=builder /app /app
 WORKDIR /app
+# Create data directory
+RUN mkdir -p /app/data
 
+# Volume for persistent data
+VOLUME ["/app/data"]
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
 
 CMD ["python", "-m", "stocktradebot"]
+
