@@ -2,6 +2,7 @@
 配置管理模块
 支持多周期多指标的监控任务
 """
+
 import json
 import os
 from pathlib import Path
@@ -48,6 +49,7 @@ DEFAULT_POLL_INTERVAL = 60  # 秒
 @dataclass
 class MonitorTask:
     """监控任务"""
+
     task_id: str  # 任务ID: {symbol}_{period}_{indicator}
     symbol: str  # 品种代码，如 Au99.99、000001
     name: str  # 品种名称
@@ -55,11 +57,13 @@ class MonitorTask:
     indicator: str  # 指标，如 MACD、KDJ
     enabled: bool = True
     last_signal: str = ""  # 上次信号状态（用于避免重复推送）
+    params: dict = field(default_factory=dict)  # 额外参数，如 {"order": 5}
 
 
 @dataclass
 class UserConfig:
     """用户配置"""
+
     chat_id: int
     tasks: list[MonitorTask] = field(default_factory=list)
     enabled: bool = True
@@ -67,14 +71,14 @@ class UserConfig:
 
 class ConfigManager:
     """配置管理器"""
-    
+
     def __init__(self, data_dir: str = "data"):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(exist_ok=True)
         self.users_file = self.data_dir / "users.json"
         self.users: dict[int, UserConfig] = {}
         self._load()
-    
+
     def _load(self):
         """加载用户配置"""
         if self.users_file.exists():
@@ -89,11 +93,11 @@ class ConfigManager:
                         self.users[chat_id] = UserConfig(
                             chat_id=chat_id,
                             tasks=tasks,
-                            enabled=user_data.get("enabled", True)
+                            enabled=user_data.get("enabled", True),
                         )
             except Exception as e:
                 print(f"加载配置失败: {e}")
-    
+
     def _save(self):
         """保存用户配置"""
         data = {}
@@ -101,52 +105,66 @@ class ConfigManager:
             data[str(chat_id)] = {
                 "chat_id": user_config.chat_id,
                 "tasks": [asdict(task) for task in user_config.tasks],
-                "enabled": user_config.enabled
+                "enabled": user_config.enabled,
             }
         with open(self.users_file, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     def get_user(self, chat_id: int) -> UserConfig:
         """获取用户配置，不存在则创建"""
         if chat_id not in self.users:
             self.users[chat_id] = UserConfig(chat_id=chat_id)
             self._save()
         return self.users[chat_id]
-    
-    def add_task(self, chat_id: int, symbol: str, name: str, period: str, indicator: str) -> tuple[bool, str]:
+
+    def add_task(
+        self,
+        chat_id: int,
+        symbol: str,
+        name: str,
+        period: str,
+        indicator: str,
+        params: dict = None,
+    ) -> tuple[bool, str]:
         """
         添加监控任务
-        
+
         Returns:
             (成功, 消息)
         """
+        if params is None:
+            params = {}
+
         # 验证周期
         if period not in PERIOD_TYPES:
             return False, f"不支持的周期: {period}"
-        
+
         # 验证指标
         if indicator.upper() not in INDICATOR_TYPES:
             return False, f"不支持的指标: {indicator}"
-        
+
         user = self.get_user(chat_id)
         task_id = f"{symbol}_{period}_{indicator.upper()}"
-        
+
         # 检查是否已存在
         for task in user.tasks:
             if task.task_id == task_id:
+                # 如果存在，更新参数？或者拒绝？
+                # 这里我们拒绝，如果用户想改参数，可以先由于remove再add
                 return False, f"任务已存在: {task_id}"
-        
+
         new_task = MonitorTask(
             task_id=task_id,
             symbol=symbol,
             name=name,
             period=period,
-            indicator=indicator.upper()
+            indicator=indicator.upper(),
+            params=params,
         )
         user.tasks.append(new_task)
         self._save()
         return True, f"已添加任务: {name} {period} {indicator.upper()}"
-    
+
     def remove_task(self, chat_id: int, task_id: str) -> bool:
         """移除监控任务"""
         user = self.get_user(chat_id)
@@ -156,12 +174,12 @@ class ConfigManager:
                 self._save()
                 return True
         return False
-    
+
     def get_user_tasks(self, chat_id: int) -> list[MonitorTask]:
         """获取用户的所有任务"""
         user = self.get_user(chat_id)
         return user.tasks
-    
+
     def get_all_tasks(self) -> list[tuple[int, MonitorTask]]:
         """获取所有用户的所有任务"""
         tasks = []
@@ -171,7 +189,7 @@ class ConfigManager:
                     if task.enabled:
                         tasks.append((chat_id, task))
         return tasks
-    
+
     def update_task_signal(self, chat_id: int, task_id: str, signal: str):
         """更新任务的最后信号状态"""
         user = self.get_user(chat_id)
@@ -185,6 +203,7 @@ class ConfigManager:
 # 全局配置函数（延迟加载）
 def get_bot_token() -> str:
     return os.environ.get("TELEGRAM_BOT_TOKEN", "")
+
 
 def get_poll_interval() -> int:
     return int(os.environ.get("POLL_INTERVAL", DEFAULT_POLL_INTERVAL))
