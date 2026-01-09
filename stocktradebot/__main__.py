@@ -9,9 +9,6 @@ import logging
 
 
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.interval import IntervalTrigger
-
 from stocktradebot.config import ConfigManager, get_bot_token, get_poll_interval, PERIOD_TYPES, MonitorTask
 from stocktradebot.stock_data import DataFetcher
 from stocktradebot.indicators import TechnicalIndicators
@@ -235,38 +232,30 @@ async def main():
     app = bot.build()
     monitor = StockMonitor(bot, config)
     
-    # 设置定时任务
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(
-        monitor.poll_all,
-        IntervalTrigger(seconds=get_poll_interval()),
-        id="poll_tasks",
-        name="轮询监控任务",
-        replace_existing=True
-    )
+    # 使用内置 job_queue 设置定时任务
+    async def scheduled_poll(context):
+        """定时轮询任务"""
+        await monitor.poll_all()
+    
+    # post_init 中添加定时任务
+    async def post_init_with_jobs(application):
+        # 先调用原有的 post_init 设置命令菜单
+        await StockBot.post_init(application)
+        # 添加定时轮询任务
+        application.job_queue.run_repeating(
+            scheduled_poll,
+            interval=get_poll_interval(),
+            first=10,  # 启动10秒后开始第一次轮询
+            name="poll_tasks"
+        )
+        logger.info(f"📋 已添加定时轮询任务，间隔: {get_poll_interval()}秒")
+    
+    # 替换 post_init
+    app.post_init = post_init_with_jobs
     
     # 启动
     logger.info(f"🚀 Bot启动中... 轮询间隔: {get_poll_interval()}秒")
-    
-    async with app:
-        await app.start()
-        await StockBot.post_init(app)
-        scheduler.start()
-        logger.info("✅ Bot已启动，等待消息...")
-        
-        # 运行直到收到停止信号
-        await app.updater.start_polling()
-        
-        # 保持运行
-        try:
-            while True:
-                await asyncio.sleep(1)
-        except (KeyboardInterrupt, SystemExit):
-            logger.info("收到停止信号，正在关闭...")
-        
-        scheduler.shutdown()
-        await app.updater.stop()
-        await app.stop()
+    app.run_polling()
 
 
 def run():
@@ -276,3 +265,4 @@ def run():
 
 if __name__ == "__main__":
     run()
+

@@ -242,8 +242,10 @@ class StockBot:
             name = "沪金" if "AU" in symbol.upper() else ("沪银" if "AG" in symbol.upper() else symbol)
             # 显示格式: 名称 - 代码
             display_name = f"{name}" if name == symbol else f"{name} - {symbol}"
+            # 获取指标显示名称（避免下划线导致Markdown解析错误）
+            indicator_display = INDICATOR_TYPES.get(indicator, {}).get("name", indicator)
             
-            msg = f"📊 **{display_name} {period_name} {indicator} 回测**\n\n"
+            msg = f"📊 **{display_name} {period_name} {indicator_display} 回测**\n\n"
             msg += f"数据范围: {df['date'].iloc[0].strftime('%Y-%m-%d')} ~ {df['date'].iloc[-1].strftime('%Y-%m-%d %H:%M')}\n"
             msg += f"共 {len(df)} 根K线\n\n"
             
@@ -622,7 +624,8 @@ class StockBot:
         for i, r in enumerate(results[:8], 1):
             emoji = "🥇" if i == 1 else ("🥈" if i == 2 else ("🥉" if i == 3 else f"{i}."))
             period_name = PERIOD_TYPES[r["period"]]["name"]
-            msg += f"{emoji} {period_name} {r['indicator']}\n"
+            indicator_name = INDICATOR_TYPES.get(r["indicator"], {}).get("name", r["indicator"])
+            msg += f"{emoji} {period_name} {indicator_name}\n"
             msg += f"   胜率:{r['win_rate']:.1f}% 交易:{r['trades']}次 累计:{r['total_return']:.2f}%\n"
         
         # 最优推荐
