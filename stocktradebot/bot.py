@@ -784,6 +784,7 @@ class StockBot:
                 if stats["trades"] > 0:
                     stats["period"] = period
                     stats["indicator"] = ind
+                    stats["indicator_base"] = ind
                     results.append(stats)
 
             # 测试背离指标 (多参数)
@@ -794,8 +795,10 @@ class StockBot:
                     )
                     if stats["trades"] > 0:
                         stats["period"] = period
-                        # 标记参数
+                        # 存储基础指标名和完整指标名（带参数）
+                        stats["indicator_base"] = ind
                         stats["indicator"] = f"{ind} (Window={window})"
+                        stats["indicator_params"] = {"window": window}
                         results.append(stats)
         if not results:
             await update.message.reply_text("❌ 未能获取足够数据进行分析")
@@ -815,21 +818,35 @@ class StockBot:
                 "🥇" if i == 1 else ("🥈" if i == 2 else ("🥉" if i == 3 else f"{i}."))
             )
             period_name = PERIOD_TYPES[r["period"]]["name"]
-            indicator_name = INDICATOR_TYPES.get(r["indicator"], {}).get(
-                "name", r["indicator"]
+            # 使用基础指标名查找显示名称，避免括号导致Markdown解析错误
+            indicator_key = r.get("indicator_base", r["indicator"])
+            indicator_name = INDICATOR_TYPES.get(indicator_key, {}).get(
+                "name", indicator_key
             )
+            # 如果有参数，添加参数信息
+            if "indicator_params" in r and r["indicator_params"]:
+                window = r["indicator_params"].get("window", "")
+                if window:
+                    indicator_name = f"{indicator_name} (Window={window})"
             msg += f"{emoji} {period_name} {indicator_name}\n"
             msg += f"   胜率:{r['win_rate']:.1f}% 交易:{r['trades']}次 累计:{r['total_return']:.2f}%\n"
 
         # 最优推荐 - 显示名称和命令
         best = results[0]
-        best_indicator_name = INDICATOR_TYPES.get(best["indicator"], {}).get(
-            "name", best["indicator"]
+        best_indicator_key = best.get("indicator_base", best["indicator"])
+        best_indicator_name = INDICATOR_TYPES.get(best_indicator_key, {}).get(
+            "name", best_indicator_key
         )
         best_period_name = PERIOD_TYPES[best["period"]]["name"]
+        # 构建命令时使用基础指标名和参数
+        best_indicator_cmd = best_indicator_key
+        if "indicator_params" in best and best["indicator_params"]:
+            window = best["indicator_params"].get("window", "")
+            if window:
+                best_indicator_cmd = f"{best_indicator_key} Window={window}"
         msg += f"\n💡 **推荐** {display_name} {best_period_name} {best_indicator_name}"
-        msg += f"\n📊 `/backtest {symbol} {best['period']} {best['indicator']}`"
-        msg += f"\n📝 `/add {symbol} {best['period']} {best['indicator']}`"
+        msg += f"\n📊 `/backtest {symbol} {best['period']} {best_indicator_cmd}`"
+        msg += f"\n📝 `/add {symbol} {best['period']} {best_indicator_cmd}`"
 
         await update.message.reply_text(msg, parse_mode="Markdown")
 
