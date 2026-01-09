@@ -563,6 +563,21 @@ class StockBot:
         symbol = args[0]
         await update.message.reply_text(f"⏳ 正在分析 {symbol} 的所有策略组合，请稍候...")
         
+        # 获取品种名称
+        name = symbol
+        if symbol.upper().startswith("AU") or symbol.upper().startswith("AG"):
+            name = "沪金" if "AU" in symbol.upper() else "沪银"
+        else:
+            # 尝试获取股票名称
+            try:
+                import akshare as ak
+                df_info = ak.stock_individual_info_em(symbol)
+                name_row = df_info[df_info["item"] == "股票简称"]
+                if not name_row.empty:
+                    name = name_row["value"].iloc[0]
+            except Exception:
+                pass  # 使用代码作为名称
+        
         results = []
         periods_to_test = ["15min", "30min", "60min", "120min", "240min", "daily"]
         indicators = ["MACD", "KDJ", "MA", "RSI", "MACD_DIV", "KDJ_DIV", "MACD_COMBO", "KDJ_COMBO"]
@@ -614,7 +629,6 @@ class StockBot:
         # 按累计收益排序
         results.sort(key=lambda x: x["total_return"], reverse=True)
         
-        name = "沪金" if "AU" in symbol.upper() else ("沪银" if "AG" in symbol.upper() else symbol)
         # 显示格式: 名称 - 代码
         display_name = f"{name}" if name == symbol else f"{name} - {symbol}"
         msg = f"🏆 **{display_name} 策略优化结果**\n\n"
@@ -628,9 +642,13 @@ class StockBot:
             msg += f"{emoji} {period_name} {indicator_name}\n"
             msg += f"   胜率:{r['win_rate']:.1f}% 交易:{r['trades']}次 累计:{r['total_return']:.2f}%\n"
         
-        # 最优推荐 - 使用 backticks 包裹命令避免 Markdown 解析问题
+        # 最优推荐 - 显示名称和命令
         best = results[0]
-        msg += f"\n💡 **推荐**: `/add {symbol} {best['period']} {best['indicator']}`"
+        best_indicator_name = INDICATOR_TYPES.get(best["indicator"], {}).get("name", best["indicator"])
+        best_period_name = PERIOD_TYPES[best["period"]]["name"]
+        msg += f"\n💡 **推荐** {display_name} {best_period_name} {best_indicator_name}"
+        msg += f"\n📊 `/backtest {symbol} {best['period']} {best['indicator']}`"
+        msg += f"\n📝 `/add {symbol} {best['period']} {best['indicator']}`"
         
         await update.message.reply_text(msg, parse_mode="Markdown")
     

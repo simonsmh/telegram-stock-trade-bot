@@ -50,10 +50,10 @@ class DataFetcher:
     @staticmethod
     def get_stock_history(symbol: str, days: int = 120) -> Optional[pd.DataFrame]:
         """
-        获取A股历史K线数据
+        获取A股/ETF历史K线数据
         
         Args:
-            symbol: 股票代码
+            symbol: 股票或ETF代码
             days: 获取天数
         
         Returns:
@@ -61,12 +61,16 @@ class DataFetcher:
         """
         try:
             code = symbol.replace("sh", "").replace("sz", "").replace(".", "")
-            df = ak.stock_zh_a_hist(
-                symbol=code,
-                period="daily",
-                adjust="qfq"
-            )
-            if df.empty:
+            
+            # 判断是否为ETF (5开头或1开头的6位代码)
+            is_etf = code.startswith("5") or code.startswith("1")
+            
+            if is_etf:
+                df = ak.fund_etf_hist_em(symbol=code, period="daily", adjust="qfq")
+            else:
+                df = ak.stock_zh_a_hist(symbol=code, period="daily", adjust="qfq")
+            
+            if df is None or df.empty:
                 return None
             # 统一列名
             df = df.rename(columns={
@@ -82,16 +86,16 @@ class DataFetcher:
             df = df.tail(days)
             return df
         except Exception as e:
-            print(f"获取股票历史数据失败 {symbol}: {e}")
+            print(f"获取历史数据失败 {symbol}: {e}")
             return None
     
     @staticmethod
     def get_stock_minute(symbol: str, period: str = "60") -> Optional[pd.DataFrame]:
         """
-        获取A股分钟K线数据
+        获取A股/ETF分钟K线数据
         
         Args:
-            symbol: 股票代码
+            symbol: 股票或ETF代码
             period: 周期，可选 "1", "5", "15", "30", "60"
         
         Returns:
@@ -99,8 +103,16 @@ class DataFetcher:
         """
         try:
             code = symbol.replace("sh", "").replace("sz", "").replace(".", "")
-            df = ak.stock_zh_a_hist_min_em(symbol=code, period=period, adjust="qfq")
-            if df.empty:
+            
+            # 判断是否为ETF (5开头或1开头的6位代码)
+            is_etf = code.startswith("5") or code.startswith("1")
+            
+            if is_etf:
+                df = ak.fund_etf_hist_min_em(symbol=code, period=period, adjust="qfq")
+            else:
+                df = ak.stock_zh_a_hist_min_em(symbol=code, period=period, adjust="qfq")
+            
+            if df is None or df.empty:
                 return None
             # 统一列名
             df = df.rename(columns={
@@ -115,7 +127,7 @@ class DataFetcher:
             df["date"] = pd.to_datetime(df["date"])
             return df
         except Exception as e:
-            print(f"获取股票分钟数据失败 {symbol}: {e}")
+            print(f"获取分钟数据失败 {symbol}: {e}")
             return None
     
     @staticmethod
