@@ -152,7 +152,9 @@ class StockMonitor:
         
         indicator = task.indicator
         
-        msg = f"{emoji} **{task.name}** ({task.symbol})\n\n"
+        # 显示格式: 名称 - 代码
+        display_name = f"{task.name}" if task.name == task.symbol else f"{task.name} - {task.symbol}"
+        msg = f"{emoji} **{display_name}**\n\n"
         msg += f"🔔 {indicator} {signal_name}\n"
         msg += f"💰 价格: {price:.2f}\n"
         msg += f"⏰ {time_str}\n"

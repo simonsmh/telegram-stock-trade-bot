@@ -143,9 +143,14 @@ class StockBot:
         success, msg = self.config.add_task(chat_id, symbol, name, period, indicator)
         
         if success:
+            # 显示格式: 名称 - 代码
+            display_name = f"{name}" if name == symbol else f"{name} - {symbol}"
             await update.message.reply_text(
                 f"✅ {msg}\n\n"
-                f"📌 任务ID: `{symbol}_{period}_{indicator}`\n"
+                f"📌 **{display_name}**\n"
+                f"   周期: {PERIOD_TYPES[period]['name']}\n"
+                f"   指标: {INDICATOR_TYPES[indicator]['name']}\n"
+                f"   任务ID: `{symbol}_{period}_{indicator}`\n\n"
                 f"当{PERIOD_TYPES[period]['name']}出现{INDICATOR_TYPES[indicator]['description']}时会推送通知",
                 parse_mode="Markdown"
             )
@@ -182,7 +187,9 @@ class StockBot:
         for i, task in enumerate(tasks, 1):
             status = "✅" if task.enabled else "⏸️"
             period_name = PERIOD_TYPES.get(task.period, {}).get("name", task.period)
-            msg += f"{i}. {status} **{task.name}** ({task.symbol})\n"
+            # 显示格式: 名称 - 代码
+            display_name = f"{task.name}" if task.name == task.symbol else f"{task.name} - {task.symbol}"
+            msg += f"{i}. {status} **{display_name}**\n"
             msg += f"   周期: {period_name} | 指标: {task.indicator}\n"
             msg += f"   ID: `{task.task_id}`\n\n"
         
@@ -229,8 +236,10 @@ class StockBot:
             # 格式化结果
             period_name = PERIOD_TYPES[period]["name"]
             name = "沪金" if "AU" in symbol.upper() else ("沪银" if "AG" in symbol.upper() else symbol)
+            # 显示格式: 名称 - 代码
+            display_name = f"{name}" if name == symbol else f"{name} - {symbol}"
             
-            msg = f"📊 **{name} {period_name} {indicator} 回测**\n\n"
+            msg = f"📊 **{display_name} {period_name} {indicator} 回测**\n\n"
             msg += f"数据范围: {df['date'].iloc[0].strftime('%Y-%m-%d')} ~ {df['date'].iloc[-1].strftime('%Y-%m-%d %H:%M')}\n"
             msg += f"共 {len(df)} 根K线\n\n"
             
@@ -468,7 +477,9 @@ class StockBot:
         results.sort(key=lambda x: x["total_return"], reverse=True)
         
         name = "沪金" if "AU" in symbol.upper() else ("沪银" if "AG" in symbol.upper() else symbol)
-        msg = f"🏆 **{name} 策略优化结果**\n\n"
+        # 显示格式: 名称 - 代码
+        display_name = f"{name}" if name == symbol else f"{name} - {symbol}"
+        msg = f"🏆 **{display_name} 策略优化结果**\n\n"
         msg += f"数据起始: {min_start_date.strftime('%Y-%m-%d')}\n\n"
         msg += "按累计收益排序:\n"
         
