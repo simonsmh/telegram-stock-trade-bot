@@ -258,7 +258,7 @@ class StockBot:
                     div_info = ""
                     if "divergence" in sig:
                         div_info = f" [{sig['divergence']}]"
-                    msg += f"{emoji} {sig['type']}{div_info} `{sig['time']}` 💰{price:.2f}\n"
+                    msg += f"{emoji} {sig['type']}{div_info} `{sig['time']}` 💰{price:.4f}\n"
                 
                 # 策略统计：金叉买入，死叉卖出
                 stats = self._calculate_strategy_stats(signals)
