@@ -628,9 +628,9 @@ class StockBot:
             msg += f"{emoji} {period_name} {indicator_name}\n"
             msg += f"   胜率:{r['win_rate']:.1f}% 交易:{r['trades']}次 累计:{r['total_return']:.2f}%\n"
         
-        # 最优推荐
+        # 最优推荐 - 使用 backticks 包裹命令避免 Markdown 解析问题
         best = results[0]
-        msg += f"\n💡 **推荐**: /add {symbol} {best['period']} {best['indicator']}"
+        msg += f"\n💡 **推荐**: `/add {symbol} {best['period']} {best['indicator']}`"
         
         await update.message.reply_text(msg, parse_mode="Markdown")
     
