@@ -250,6 +250,7 @@ async def main():
     
     async with app:
         await app.start()
+        await StockBot.post_init(app)
         scheduler.start()
         logger.info("✅ Bot已启动，等待消息...")
         
