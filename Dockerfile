@@ -34,7 +34,7 @@ WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 
 # Copy application code
-COPY --from=builder /app/src /app/src
+COPY --from=builder /app/stocktradebot /app/stocktradebot
 
 # Create data directory
 RUN mkdir -p /app/data
