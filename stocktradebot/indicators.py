@@ -265,40 +265,45 @@ class TechnicalIndicators:
             检测到的背离列表
         """
         if len(df) < lookback:
+            lookback = len(df)
+        if lookback < 30:
             return []
         
         # 只分析最近的数据
         df_subset = df.tail(lookback).reset_index(drop=True)
         macd_df = TechnicalIndicators.calculate_macd(df_subset)
         
-        # 使用MACD柱状图 (而非DIF) 进行背离检测
+        # 使用MACD柱状图进行背离检测
         macd_series = macd_df["macd"]
         price_series = df_subset["close"]
         
-        # 找出高点和低点
-        price_peaks, price_valleys = TechnicalIndicators.find_peaks(price_series, order=3)
-        macd_peaks, macd_valleys = TechnicalIndicators.find_peaks(macd_series, order=3)
+        # 使用较小的order值找到更多高低点
+        price_peaks, price_valleys = TechnicalIndicators.find_peaks(price_series, order=2)
+        macd_peaks, macd_valleys = TechnicalIndicators.find_peaks(macd_series, order=2)
         
         divergences = []
         
-        # 检测顶背离：价格创新高，但MACD未创新高
-        if len(price_peaks) >= 2 and len(macd_peaks) >= 2:
-            # 取最近两个高点
-            p1, p2 = price_peaks[-2], price_peaks[-1]
+        # 检测顶背离：遍历所有相邻价格高点对
+        for i in range(len(price_peaks) - 1):
+            p1, p2 = price_peaks[i], price_peaks[i + 1]
             
-            # 找到对应时间范围内的MACD高点
-            m_peaks_in_range = [m for m in macd_peaks if m >= p1 - 5 and m <= p2 + 5]
+            # 找到对应时间范围内的MACD高点（扩大搜索范围）
+            m_peaks_in_range = [m for m in macd_peaks if m >= p1 - 10 and m <= p2 + 10]
             if len(m_peaks_in_range) >= 2:
-                m1, m2 = m_peaks_in_range[-2], m_peaks_in_range[-1]
+                # 找最接近p1和p2的MACD高点
+                m1 = min(m_peaks_in_range, key=lambda x: abs(x - p1))
+                m2 = min(m_peaks_in_range, key=lambda x: abs(x - p2))
+                
+                if m1 >= m2:
+                    continue
                 
                 price_higher = price_series.iloc[p2] > price_series.iloc[p1]
                 macd_lower = macd_series.iloc[m2] < macd_series.iloc[m1]
                 
                 if price_higher and macd_lower:
-                    # 计算背离强度
                     price_diff_pct = (price_series.iloc[p2] - price_series.iloc[p1]) / price_series.iloc[p1] * 100
                     macd_diff_pct = (macd_series.iloc[m1] - macd_series.iloc[m2]) / abs(macd_series.iloc[m1]) * 100 if macd_series.iloc[m1] != 0 else 0
-                    strength = min(100, (price_diff_pct + macd_diff_pct) * 10)
+                    strength = min(100, abs(price_diff_pct + macd_diff_pct) * 10)
                     
                     divergences.append(DivergenceData(
                         divergence_type="顶背离",
@@ -312,24 +317,25 @@ class TechnicalIndicators:
                         strength=strength
                     ))
         
-        # 检测底背离：价格创新低，但MACD未创新低
-        if len(price_valleys) >= 2 and len(macd_valleys) >= 2:
-            # 取最近两个低点
-            p1, p2 = price_valleys[-2], price_valleys[-1]
+        # 检测底背离：遍历所有相邻价格低点对
+        for i in range(len(price_valleys) - 1):
+            p1, p2 = price_valleys[i], price_valleys[i + 1]
             
-            # 找到对应时间范围内的MACD低点
-            m_valleys_in_range = [m for m in macd_valleys if m >= p1 - 5 and m <= p2 + 5]
+            m_valleys_in_range = [m for m in macd_valleys if m >= p1 - 10 and m <= p2 + 10]
             if len(m_valleys_in_range) >= 2:
-                m1, m2 = m_valleys_in_range[-2], m_valleys_in_range[-1]
+                m1 = min(m_valleys_in_range, key=lambda x: abs(x - p1))
+                m2 = min(m_valleys_in_range, key=lambda x: abs(x - p2))
+                
+                if m1 >= m2:
+                    continue
                 
                 price_lower = price_series.iloc[p2] < price_series.iloc[p1]
                 macd_higher = macd_series.iloc[m2] > macd_series.iloc[m1]
                 
                 if price_lower and macd_higher:
-                    # 计算背离强度
                     price_diff_pct = (price_series.iloc[p1] - price_series.iloc[p2]) / price_series.iloc[p1] * 100
                     macd_diff_pct = (macd_series.iloc[m2] - macd_series.iloc[m1]) / abs(macd_series.iloc[m1]) * 100 if macd_series.iloc[m1] != 0 else 0
-                    strength = min(100, (price_diff_pct + macd_diff_pct) * 10)
+                    strength = min(100, abs(price_diff_pct + macd_diff_pct) * 10)
                     
                     divergences.append(DivergenceData(
                         divergence_type="底背离",
@@ -358,6 +364,8 @@ class TechnicalIndicators:
             检测到的背离列表
         """
         if len(df) < lookback:
+            lookback = len(df)
+        if lookback < 30:
             return []
         
         # 只分析最近的数据
@@ -368,19 +376,23 @@ class TechnicalIndicators:
         j_series = kdj_df["j"]
         price_series = df_subset["close"]
         
-        # 找出高点和低点
-        price_peaks, price_valleys = TechnicalIndicators.find_peaks(price_series, order=3)
-        j_peaks, j_valleys = TechnicalIndicators.find_peaks(j_series, order=3)
+        # 使用较小的order值找到更多高低点
+        price_peaks, price_valleys = TechnicalIndicators.find_peaks(price_series, order=2)
+        j_peaks, j_valleys = TechnicalIndicators.find_peaks(j_series, order=2)
         
         divergences = []
         
-        # 检测顶背离：价格创新高，但J值未创新高
-        if len(price_peaks) >= 2 and len(j_peaks) >= 2:
-            p1, p2 = price_peaks[-2], price_peaks[-1]
+        # 检测顶背离：遍历所有相邻价格高点对
+        for i in range(len(price_peaks) - 1):
+            p1, p2 = price_peaks[i], price_peaks[i + 1]
             
-            j_peaks_in_range = [j for j in j_peaks if j >= p1 - 5 and j <= p2 + 5]
+            j_peaks_in_range = [j for j in j_peaks if j >= p1 - 10 and j <= p2 + 10]
             if len(j_peaks_in_range) >= 2:
-                j1, j2 = j_peaks_in_range[-2], j_peaks_in_range[-1]
+                j1 = min(j_peaks_in_range, key=lambda x: abs(x - p1))
+                j2 = min(j_peaks_in_range, key=lambda x: abs(x - p2))
+                
+                if j1 >= j2:
+                    continue
                 
                 price_higher = price_series.iloc[p2] > price_series.iloc[p1]
                 j_lower = j_series.iloc[j2] < j_series.iloc[j1]
@@ -388,7 +400,7 @@ class TechnicalIndicators:
                 if price_higher and j_lower:
                     price_diff_pct = (price_series.iloc[p2] - price_series.iloc[p1]) / price_series.iloc[p1] * 100
                     j_diff_pct = (j_series.iloc[j1] - j_series.iloc[j2]) / abs(j_series.iloc[j1]) * 100 if j_series.iloc[j1] != 0 else 0
-                    strength = min(100, (price_diff_pct + j_diff_pct) * 5)
+                    strength = min(100, abs(price_diff_pct + j_diff_pct) * 5)
                     
                     divergences.append(DivergenceData(
                         divergence_type="顶背离",
@@ -402,13 +414,17 @@ class TechnicalIndicators:
                         strength=strength
                     ))
         
-        # 检测底背离：价格创新低，但J值未创新低
-        if len(price_valleys) >= 2 and len(j_valleys) >= 2:
-            p1, p2 = price_valleys[-2], price_valleys[-1]
+        # 检测底背离：遍历所有相邻价格低点对
+        for i in range(len(price_valleys) - 1):
+            p1, p2 = price_valleys[i], price_valleys[i + 1]
             
-            j_valleys_in_range = [j for j in j_valleys if j >= p1 - 5 and j <= p2 + 5]
+            j_valleys_in_range = [j for j in j_valleys if j >= p1 - 10 and j <= p2 + 10]
             if len(j_valleys_in_range) >= 2:
-                j1, j2 = j_valleys_in_range[-2], j_valleys_in_range[-1]
+                j1 = min(j_valleys_in_range, key=lambda x: abs(x - p1))
+                j2 = min(j_valleys_in_range, key=lambda x: abs(x - p2))
+                
+                if j1 >= j2:
+                    continue
                 
                 price_lower = price_series.iloc[p2] < price_series.iloc[p1]
                 j_higher = j_series.iloc[j2] > j_series.iloc[j1]
@@ -416,7 +432,7 @@ class TechnicalIndicators:
                 if price_lower and j_higher:
                     price_diff_pct = (price_series.iloc[p1] - price_series.iloc[p2]) / price_series.iloc[p1] * 100
                     j_diff_pct = (j_series.iloc[j2] - j_series.iloc[j1]) / abs(j_series.iloc[j1]) * 100 if j_series.iloc[j1] != 0 else 0
-                    strength = min(100, (price_diff_pct + j_diff_pct) * 5)
+                    strength = min(100, abs(price_diff_pct + j_diff_pct) * 5)
                     
                     divergences.append(DivergenceData(
                         divergence_type="底背离",
