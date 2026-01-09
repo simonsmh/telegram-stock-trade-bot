@@ -484,7 +484,8 @@ class StockBot:
         
         await update.message.reply_text(msg, parse_mode="Markdown")
     
-    async def post_init(self, application):
+    @staticmethod
+    async def post_init(application):
         """Bot启动后设置命令菜单"""
         commands = [
             ("start", "开始使用"),
@@ -508,6 +509,6 @@ class StockBot:
     
     def build(self) -> Application:
         """构建Application"""
-        self.app = Application.builder().token(self.token).post_init(self.post_init).build()
+        self.app = Application.builder().token(self.token).post_init(StockBot.post_init).build()
         self.setup_handlers()
         return self.app
