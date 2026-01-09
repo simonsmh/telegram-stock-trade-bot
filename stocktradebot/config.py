@@ -28,6 +28,10 @@ INDICATOR_TYPES = {
     "KDJ": {"name": "KDJ指标", "description": "K/D金叉死叉"},
     "MA": {"name": "均线", "description": "MA5/MA10金叉死叉"},
     "RSI": {"name": "RSI指标", "description": "超卖买入/超买卖出"},
+    "MACD_DIV": {"name": "MACD背离", "description": "MACD背离信号"},
+    "KDJ_DIV": {"name": "KDJ背离", "description": "KDJ背离信号"},
+    "MACD_COMBO": {"name": "MACD组合", "description": "背离+金叉确认"},
+    "KDJ_COMBO": {"name": "KDJ组合", "description": "背离+金叉确认"},
 }
 
 # 支持的品种类型

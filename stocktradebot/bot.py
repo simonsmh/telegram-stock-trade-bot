@@ -59,17 +59,21 @@ class StockBot:
 
 **品种:** `Au99.99` `Ag99.99` 或股票代码
 **周期:** `1min` `5min` `15min` `30min` `60min` `120min` `daily`
-**指标:** `MACD` `KDJ` `MA`
+**指标:** 
+• `MACD` `KDJ` `MA` `RSI` - 金叉死叉
+• `MACD_DIV` `KDJ_DIV` - 背离信号
+• `MACD_COMBO` `KDJ_COMBO` - 背离+金叉确认
 
 ━━━━━ 使用示例 ━━━━━
-`/add Au99.99 60min MACD` → 沪金60分钟MACD
-`/add Au99.99 60min KDJ` → 沪金60分钟KDJ
-`/backtest Au99.99 60min MACD` → 回测查询
+`/add Au99.99 60min MACD` → 普通MACD金叉死叉
+`/add Au99.99 60min MACD_COMBO` → MACD背离+金叉确认
+`/backtest Au99.99 60min MACD_COMBO` → 背离策略回测
 
 ━━━━━ 管理任务 ━━━━━
 `/tasks` 查看任务
 `/remove 任务ID` 移除任务
 `/backtest 品种 周期 指标` 回测查询
+`/optimize 品种` 策略优化
 `/list_type` 支持的类型
 """
         await update.message.reply_text(help_msg, parse_mode="Markdown")
@@ -249,19 +253,22 @@ class StockBot:
                 for sig in signals[-20:]:  # 最近20个
                     emoji = "📈" if sig["type"] == "金叉" else "📉"
                     price = sig.get("price", 0)
-                    msg += f"{emoji} {sig['type']} `{sig['time']}` 💰{price:.2f}\n"
+                    div_info = ""
+                    if "divergence" in sig:
+                        div_info = f" [{sig['divergence']}]"
+                    msg += f"{emoji} {sig['type']}{div_info} `{sig['time']}` 💰{price:.2f}\n"
                 
                 # 策略统计：金叉买入，死叉卖出
                 stats = self._calculate_strategy_stats(signals)
                 if stats["total_trades"] > 0:
-                    msg += f"\n**策略统计 (金叉买/死叉卖):**\n"
+                    msg += "\n**策略统计 (金叉买/死叉卖):**\n"
                     msg += f"交易次数: {stats['total_trades']}\n"
                     msg += f"盈利次数: {stats['win_count']} ({stats['win_rate']:.1f}%)\n"
                     msg += f"平均收益: {stats['avg_return']:.2f}%\n"
                     msg += f"累计收益: {stats['total_return']:.2f}%\n"
                 
                 # 当前状态
-                msg += f"\n**当前状态:**\n"
+                msg += "\n**当前状态:**\n"
                 msg += sig.get("status", "")
             else:
                 msg += "未发现信号"
@@ -369,6 +376,135 @@ class StockBot:
             if signals:
                 signals[-1]["status"] = f"RSI: {rsi_df['rsi'].iloc[-1]:.2f}"
         
+        elif indicator == "MACD_DIV":
+            # MACD纯背离策略
+            divergences = TechnicalIndicators.detect_macd_divergence(df, lookback=len(df))
+            for div in divergences:
+                time_str = df["date"].iloc[div.peak2_idx].strftime("%Y-%m-%d %H:%M")
+                price = df["close"].iloc[div.peak2_idx]
+                sig_type = "金叉" if div.divergence_type == "底背离" else "死叉"
+                signals.append({
+                    "type": sig_type,
+                    "time": time_str,
+                    "price": price,
+                    "divergence": div.divergence_type,
+                    "strength": div.strength
+                })
+            
+            if signals:
+                signals[-1]["status"] = f"检测到 {len(divergences)} 处背离"
+        
+        elif indicator == "KDJ_DIV":
+            # KDJ纯背离策略
+            divergences = TechnicalIndicators.detect_kdj_divergence(df, lookback=len(df))
+            for div in divergences:
+                time_str = df["date"].iloc[div.peak2_idx].strftime("%Y-%m-%d %H:%M")
+                price = df["close"].iloc[div.peak2_idx]
+                sig_type = "金叉" if div.divergence_type == "底背离" else "死叉"
+                signals.append({
+                    "type": sig_type,
+                    "time": time_str,
+                    "price": price,
+                    "divergence": div.divergence_type,
+                    "strength": div.strength
+                })
+            
+            if signals:
+                signals[-1]["status"] = f"检测到 {len(divergences)} 处背离"
+        
+        elif indicator == "MACD_COMBO":
+            # MACD背离+金叉确认策略
+            macd_df = TechnicalIndicators.calculate_macd(df)
+            divergences = TechnicalIndicators.detect_macd_divergence(df, lookback=len(df))
+            
+            # 记录背离位置
+            bullish_div_indices = set()
+            bearish_div_indices = set()
+            for div in divergences:
+                if div.divergence_type == "底背离":
+                    # 底背离后的范围内等待金叉
+                    for idx in range(div.peak2_idx, min(div.peak2_idx + 10, len(df))):
+                        bullish_div_indices.add(idx)
+                else:
+                    # 顶背离后的范围内等待死叉
+                    for idx in range(div.peak2_idx, min(div.peak2_idx + 10, len(df))):
+                        bearish_div_indices.add(idx)
+            
+            # 检测金叉死叉，但只有在背离范围内才计入
+            for i in range(1, len(df)):
+                prev_dif = macd_df["dif"].iloc[i-1]
+                prev_dea = macd_df["dea"].iloc[i-1]
+                curr_dif = macd_df["dif"].iloc[i]
+                curr_dea = macd_df["dea"].iloc[i]
+                time_str = df["date"].iloc[i].strftime("%Y-%m-%d %H:%M")
+                price = df["close"].iloc[i]
+                
+                # 底背离+金叉确认
+                if i in bullish_div_indices and prev_dif <= prev_dea and curr_dif > curr_dea:
+                    signals.append({
+                        "type": "金叉",
+                        "time": time_str,
+                        "price": price,
+                        "divergence": "底背离确认"
+                    })
+                # 顶背离+死叉确认
+                if i in bearish_div_indices and prev_dif >= prev_dea and curr_dif < curr_dea:
+                    signals.append({
+                        "type": "死叉",
+                        "time": time_str,
+                        "price": price,
+                        "divergence": "顶背离确认"
+                    })
+            
+            if signals:
+                status = "多头" if macd_df["dif"].iloc[-1] > macd_df["dea"].iloc[-1] else "空头"
+                signals[-1]["status"] = f"DIF: {macd_df['dif'].iloc[-1]:.4f}\nDEA: {macd_df['dea'].iloc[-1]:.4f}\n趋势: {status}"
+        
+        elif indicator == "KDJ_COMBO":
+            # KDJ背离+金叉确认策略
+            kdj_df = TechnicalIndicators.calculate_kdj(df)
+            divergences = TechnicalIndicators.detect_kdj_divergence(df, lookback=len(df))
+            
+            # 记录背离位置
+            bullish_div_indices = set()
+            bearish_div_indices = set()
+            for div in divergences:
+                if div.divergence_type == "底背离":
+                    for idx in range(div.peak2_idx, min(div.peak2_idx + 10, len(df))):
+                        bullish_div_indices.add(idx)
+                else:
+                    for idx in range(div.peak2_idx, min(div.peak2_idx + 10, len(df))):
+                        bearish_div_indices.add(idx)
+            
+            # 检测KDJ金叉死叉，但只有在背离范围内才计入
+            for i in range(1, len(df)):
+                prev_k = kdj_df["k"].iloc[i-1]
+                prev_d = kdj_df["d"].iloc[i-1]
+                curr_k = kdj_df["k"].iloc[i]
+                curr_d = kdj_df["d"].iloc[i]
+                time_str = df["date"].iloc[i].strftime("%Y-%m-%d %H:%M")
+                price = df["close"].iloc[i]
+                
+                # 底背离+金叉确认
+                if i in bullish_div_indices and prev_k <= prev_d and curr_k > curr_d:
+                    signals.append({
+                        "type": "金叉",
+                        "time": time_str,
+                        "price": price,
+                        "divergence": "底背离确认"
+                    })
+                # 顶背离+死叉确认
+                if i in bearish_div_indices and prev_k >= prev_d and curr_k < curr_d:
+                    signals.append({
+                        "type": "死叉",
+                        "time": time_str,
+                        "price": price,
+                        "divergence": "顶背离确认"
+                    })
+            
+            if signals:
+                signals[-1]["status"] = f"K: {kdj_df['k'].iloc[-1]:.2f}\nD: {kdj_df['d'].iloc[-1]:.2f}\nJ: {kdj_df['j'].iloc[-1]:.2f}"
+        
         return signals
     
     def _calculate_strategy_stats(self, signals: list) -> dict:
@@ -427,7 +563,7 @@ class StockBot:
         
         results = []
         periods_to_test = ["15min", "30min", "60min", "120min", "240min", "daily"]
-        indicators = ["MACD", "KDJ", "MA", "RSI"]
+        indicators = ["MACD", "KDJ", "MA", "RSI", "MACD_DIV", "KDJ_DIV", "MACD_COMBO", "KDJ_COMBO"]
         
         # 先获取所有数据，找出时间范围的短板
         all_data = {}
