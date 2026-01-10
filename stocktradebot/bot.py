@@ -838,7 +838,7 @@ class StockBot:
         msg += f"数据起始: {min_start_date.strftime('%Y-%m-%d')}\n\n"
         msg += "按累计收益排序:\n"
 
-        for i, r in enumerate(results[:8], 1):
+        for i, r in enumerate(results[:10], 1):
             emoji = (
                 "🥇" if i == 1 else ("🥈" if i == 2 else ("🥉" if i == 3 else f"{i}."))
             )
@@ -848,13 +848,17 @@ class StockBot:
             indicator_name = INDICATOR_TYPES.get(indicator_key, {}).get(
                 "name", indicator_key
             )
-            # 如果有参数，添加参数信息
+            # 构建指令参数
+            indicator_cmd = indicator_key
             if "indicator_params" in r and r["indicator_params"]:
                 window = r["indicator_params"].get("window", "")
                 if window:
                     indicator_name = f"{indicator_name} (Window={window})"
+                    indicator_cmd = f"{indicator_key} Window={window}"
             msg += f"{emoji} {period_name} {indicator_name}\n"
             msg += f"   胜率:{r['win_rate']:.1f}% 交易:{r['trades']}次 累计:{r['total_return']:.2f}%\n"
+            msg += f"   `/backtest {symbol} {r['period']} {indicator_cmd}`\n"
+            msg += f"   `/add {symbol} {r['period']} {indicator_cmd}`\n"
 
         # 最优推荐 - 显示名称和命令
         best = results[0]
