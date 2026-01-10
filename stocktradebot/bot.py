@@ -177,7 +177,7 @@ class StockBot:
                 name_row = df[df["item"] == "股票简称"]
                 if not name_row.empty:
                     name = name_row["value"].values[0]
-            except:
+            except Exception:
                 pass  # 使用代码作为名称
 
         # 添加任务
@@ -340,7 +340,7 @@ class StockBot:
                     msg += f"{emoji} {sig['type']}{div_info} `{sig['time']}` 💰{price:.4f}\n"
 
                 # 策略统计：金叉买入，死叉卖出
-                stats = self._calculate_strategy_stats(signals)
+                stats = self._calculate_strategy_stats(df, indicator, params, signals=signals)
                 if stats["total_trades"] > 0:
                     msg += "\n**策略统计 (金叉买/死叉卖):**\n"
                     msg += f"交易次数: {stats['total_trades']}\n"
@@ -644,12 +644,20 @@ class StockBot:
         return signals
 
     def _calculate_strategy_stats(
-        self, df, indicator: str, params: dict = None
+        self, df, indicator: str, params: dict = None, signals: list = None
     ) -> dict:
         """计算策略统计数据"""
-        signals = self._detect_signals(df, indicator, params)
+        if signals is None:
+            signals = self._detect_signals(df, indicator, params)
         if not signals:
-            return {"win_rate": 0, "trades": 0, "total_return": 0}
+            return {
+                "win_rate": 0,
+                "trades": 0,
+                "total_trades": 0,
+                "total_return": 0,
+                "win_count": 0,
+                "avg_return": 0,
+            }
 
         capital = 10000
         position = 0
@@ -663,11 +671,8 @@ class StockBot:
                 capital = 0
             elif sig["type"] == "死叉" and position > 0:
                 amount = position * sig["price"]
-                profit = (
-                    amount - initial_capital
-                )  # 计算单次盈亏基于初始资金是不对的，应该是基于买入时的资金
-                # 简化计算：如果卖出价 > 上次买入价（这里没记录）
-                # 由于这是简化版，我们统计总回报
+                # Note: profit calculation removed as it was unused;
+                # total return is computed later based on final capital
                 trades += 1
                 capital = amount
                 position = 0
@@ -684,21 +689,32 @@ class StockBot:
         capital = 10000
         position = 0
         entry_price = 0
+        total_trade_return_pct = 0
+
         for sig in signals:
             if sig["type"] == "金叉" and position == 0:
                 position = capital / sig["price"]
                 entry_price = sig["price"]
                 capital = 0
             elif sig["type"] == "死叉" and position > 0:
-                train_return = (sig["price"] - entry_price) / entry_price
-                if train_return > 0:
+                trade_return = (sig["price"] - entry_price) / entry_price
+                total_trade_return_pct += trade_return
+                if trade_return > 0:
                     wins += 1
                 capital = position * sig["price"]
                 position = 0
 
         win_rate = (wins / trades * 100) if trades > 0 else 0
+        avg_return = (total_trade_return_pct / trades * 100) if trades > 0 else 0
 
-        return {"win_rate": win_rate, "trades": trades, "total_return": total_return}
+        return {
+            "win_rate": win_rate,
+            "trades": trades,
+            "total_trades": trades,
+            "total_return": total_return,
+            "win_count": wins,
+            "avg_return": avg_return,
+        }
 
     def setup_handlers(self):
         """设置命令处理器"""

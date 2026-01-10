@@ -269,9 +269,9 @@ class StockMonitor:
         msg += f"📊 周期: {period_name}\n"
 
         # 若有额外参数，显示之
-        params = getattr(task, "params", {})
-        if params and "order" in params:
-            msg += f"⚙️ 参数: Window={params['order']}\n"
+        params = getattr(task, "params", {}) or {}
+        if params.get("window"):
+            msg += f"⚙️ 参数: Window={params['window']}\n"
 
         # 添加指标详情
         if "MACD" in indicator:
