@@ -202,16 +202,16 @@ class StockBot:
                         params_list.append(f"{k}={v}")
                 params_str = f" | 参数: {', '.join(params_list)}"
 
-            # Escape underscores for Telegram Markdown
+            # Escape underscores for Telegram Markdown (not needed inside backticks)
             escaped_indicator = INDICATOR_TYPES[indicator]['name'].replace('_', '\\_')
-            escaped_task_id = f"{symbol}_{period}_{indicator}".replace('_', '\\_')
+            task_id = f"{symbol}_{period}_{indicator}"
             
             await update.message.reply_text(
                 f"✅ {msg}\n\n"
                 f"📌 *{display_name}*\n"
                 f"   周期: {PERIOD_TYPES[period]['name']}\n"
                 f"   指标: {escaped_indicator}{params_str}\n"
-                f"   任务ID: `{escaped_task_id}`\n\n"
+                f"   任务ID: `{task_id}`\n\n"
                 f"当{PERIOD_TYPES[period]['name']}出现{INDICATOR_TYPES[indicator]['description']}时会推送通知",
                 parse_mode="Markdown",
             )
@@ -267,13 +267,12 @@ class StockBot:
                         params_list.append(f"{k}={v}")
                 params_str = f" | 参数: {', '.join(params_list)}"
 
-            # Escape underscores for Telegram Markdown
+            # Escape underscores for Telegram Markdown (not needed inside backticks)
             escaped_indicator = task.indicator.replace('_', '\\_')
-            escaped_task_id = task.task_id.replace('_', '\\_')
             
             msg += f"{i}. {status} *{display_name}*\n"
             msg += f"   周期: {period_name} | 指标: {escaped_indicator}{params_str}\n"
-            msg += f"   ID: `{escaped_task_id}`\n\n"
+            msg += f"   ID: `{task.task_id}`\n\n"
 
         msg += "使用 /remove 任务ID 移除任务"
         await update.message.reply_text(msg, parse_mode="Markdown")
