@@ -32,38 +32,38 @@ class StockBot:
         self.config.get_user(chat_id)
 
         welcome_msg = """
-🤖 **股票/期货技术指标监控Bot**
+🤖 *股票/期货技术指标监控Bot*
 
 欢迎使用！支持多周期、多指标的实时监控，当出现金叉/死叉时自动推送通知。
 
-**快速开始:**
+*快速开始:*
 1️⃣ `/add 品种 周期 指标` 添加监控
 2️⃣ `/tasks` 查看已添加的任务
 3️⃣ 等待信号推送 🔔
 
-**示例:**
+*示例:*
 • `/add Au99.99 60min MACD` - 沪金60分钟MACD
 • `/add Au99.99 60min KDJ` - 沪金60分钟KDJ
 
-**全部命令:**
-/add /tasks /remove /backtest /list_type /help
+*全部命令:*
+/add /tasks /remove /backtest /list\\_type /help
 """
         await update.message.reply_text(welcome_msg, parse_mode="Markdown")
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理 /help 命令"""
         help_msg = """
-📖 **详细使用帮助**
+📖 *详细使用帮助*
 
 ━━━━━ 添加监控任务 ━━━━━
-**命令格式:** `/add 品种 周期 指标`
+*命令格式:* `/add 品种 周期 指标`
 
-**品种:** `Au99.99` `Ag99.99` 或股票代码
-**周期:** `1min` `5min` `15min` `30min` `60min` `120min` `daily`
-**指标:** 
+*品种:* `Au99.99` `Ag99.99` 或股票代码
+*周期:* `1min` `5min` `15min` `30min` `60min` `120min` `daily`
+*指标:* 
 • `MACD` `KDJ` `MA` `RSI` - 金叉死叉
-• `MACD_DIV` `KDJ_DIV` - 背离信号
-• `MACD_COMBO` `KDJ_COMBO` - 背离+金叉确认
+• `MACD\_DIV` `KDJ\_DIV` - 背离信号
+• `MACD\_COMBO` `KDJ\_COMBO` - 背离+金叉确认
 
 ━━━━━ 使用示例 ━━━━━
 `/add Au99.99 60min MACD` → 普通MACD金叉死叉
@@ -81,17 +81,19 @@ class StockBot:
 
     async def list_type(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理 /list_type 命令 - 列出支持的周期和指标"""
-        msg = "📊 **支持的类型**\n\n"
+        msg = "📊 *支持的类型*\n\n"
 
-        msg += "**周期类型:**\n"
+        msg += "*周期类型:*\n"
         for key, info in PERIOD_TYPES.items():
             msg += f"• `{key}` - {info['name']}\n"
 
-        msg += "\n**指标类型:**\n"
+        msg += "\n*指标类型:*\n"
         for key, info in INDICATOR_TYPES.items():
-            msg += f"• `{key}` - {info['name']} ({info['description']})\n"
+            # Escape underscores in indicator keys for Telegram Markdown
+            escaped_key = key.replace("_", "\\_")
+            msg += f"• `{escaped_key}` - {info['name']} ({info['description']})\n"
 
-        msg += "\n**支持的品种:**\n"
+        msg += "\n*支持的品种:*\n"
         msg += "• `Au99.99` - 沪金AU9999\n"
         msg += "• `Ag99.99` - 沪银AG9999\n"
         msg += "• A股股票代码 (如 `000001`)\n"
@@ -200,12 +202,16 @@ class StockBot:
                         params_list.append(f"{k}={v}")
                 params_str = f" | 参数: {', '.join(params_list)}"
 
+            # Escape underscores for Telegram Markdown
+            escaped_indicator = INDICATOR_TYPES[indicator]['name'].replace('_', '\\_')
+            escaped_task_id = f"{symbol}_{period}_{indicator}".replace('_', '\\_')
+            
             await update.message.reply_text(
                 f"✅ {msg}\n\n"
-                f"📌 **{display_name}**\n"
+                f"📌 *{display_name}*\n"
                 f"   周期: {PERIOD_TYPES[period]['name']}\n"
-                f"   指标: {INDICATOR_TYPES[indicator]['name']}{params_str}\n"
-                f"   任务ID: `{symbol}_{period}_{indicator}`\n\n"
+                f"   指标: {escaped_indicator}{params_str}\n"
+                f"   任务ID: `{escaped_task_id}`\n\n"
                 f"当{PERIOD_TYPES[period]['name']}出现{INDICATOR_TYPES[indicator]['description']}时会推送通知",
                 parse_mode="Markdown",
             )
@@ -238,7 +244,7 @@ class StockBot:
             )
             return
 
-        msg = "📋 **我的监控任务**\n\n"
+        msg = "📋 *我的监控任务*\n\n"
         for i, task in enumerate(tasks, 1):
             status = "✅" if task.enabled else "⏸️"
             period_name = PERIOD_TYPES.get(task.period, {}).get("name", task.period)
@@ -261,9 +267,13 @@ class StockBot:
                         params_list.append(f"{k}={v}")
                 params_str = f" | 参数: {', '.join(params_list)}"
 
-            msg += f"{i}. {status} **{display_name}**\n"
-            msg += f"   周期: {period_name} | 指标: {task.indicator}{params_str}\n"
-            msg += f"   ID: `{task.task_id}`\n\n"
+            # Escape underscores for Telegram Markdown
+            escaped_indicator = task.indicator.replace('_', '\\_')
+            escaped_task_id = task.task_id.replace('_', '\\_')
+            
+            msg += f"{i}. {status} *{display_name}*\n"
+            msg += f"   周期: {period_name} | 指标: {escaped_indicator}{params_str}\n"
+            msg += f"   ID: `{escaped_task_id}`\n\n"
 
         msg += "使用 /remove 任务ID 移除任务"
         await update.message.reply_text(msg, parse_mode="Markdown")
@@ -324,13 +334,13 @@ class StockBot:
                 "name", indicator
             )
 
-            msg = f"📊 **{display_name} {period_name} {indicator_display} 回测**\n\n"
+            msg = f"📊 *{display_name} {period_name} {indicator_display} 回测*\n\n"
             msg += f"数据范围: {df['date'].iloc[0].strftime('%Y-%m-%d')} ~ {df['date'].iloc[-1].strftime('%Y-%m-%d %H:%M')}\n"
             msg += f"共 {len(df)} 根K线\n\n"
 
             if signals:
                 show_count = min(len(signals), 20)
-                msg += f"**最近 {show_count} 次信号:**\n"
+                msg += f"*最近 {show_count} 次信号:*\n"
                 for sig in signals[-20:]:  # 最近20个
                     emoji = "📈" if sig["type"] == "金叉" else "📉"
                     price = sig.get("price", 0)
@@ -342,7 +352,7 @@ class StockBot:
                 # 策略统计：金叉买入，死叉卖出
                 stats = self._calculate_strategy_stats(df, indicator, params, signals=signals)
                 if stats["total_trades"] > 0:
-                    msg += "\n**策略统计 (金叉买/死叉卖):**\n"
+                    msg += "\n*策略统计 (金叉买/死叉卖):*\n"
                     msg += f"交易次数: {stats['total_trades']}\n"
                     msg += (
                         f"盈利次数: {stats['win_count']} ({stats['win_rate']:.1f}%)\n"
@@ -351,7 +361,7 @@ class StockBot:
                     msg += f"累计收益: {stats['total_return']:.2f}%\n"
 
                 # 当前状态
-                msg += "\n**当前状态:**\n"
+                msg += "\n*当前状态:*\n"
                 msg += sig.get("status", "")
             else:
                 msg += "未发现信号"
@@ -825,7 +835,7 @@ class StockBot:
 
         # 显示格式: 名称 - 代码
         display_name = f"{name}" if name == symbol else f"{name} - {symbol}"
-        msg = f"🏆 **{display_name} 策略优化结果**\n\n"
+        msg = f"🏆 *{display_name} 策略优化结果*\n\n"
         msg += f"数据起始: {min_start_date.strftime('%Y-%m-%d')}\n\n"
         msg += "按累计收益排序:\n"
 
@@ -860,7 +870,7 @@ class StockBot:
             window = best["indicator_params"].get("window", "")
             if window:
                 best_indicator_cmd = f"{best_indicator_key} Window={window}"
-        msg += f"\n💡 **推荐** {display_name} {best_period_name} {best_indicator_name}"
+        msg += f"\n💡 *推荐* {display_name} {best_period_name} {best_indicator_name}"
         msg += f"\n📊 `/backtest {symbol} {best['period']} {best_indicator_cmd}`"
         msg += f"\n📝 `/add {symbol} {best['period']} {best_indicator_cmd}`"
 
