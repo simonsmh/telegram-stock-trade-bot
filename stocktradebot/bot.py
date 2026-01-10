@@ -321,11 +321,21 @@ class StockBot:
 
             # 格式化结果
             period_name = PERIOD_TYPES[period]["name"]
-            name = (
-                "沪金"
-                if "AU" in symbol.upper()
-                else ("沪银" if "AG" in symbol.upper() else symbol)
-            )
+            # 获取品种名称
+            name = symbol
+            if symbol.upper().startswith("AU") or symbol.upper().startswith("AG"):
+                name = "沪金" if "AU" in symbol.upper() else "沪银"
+            else:
+                # 尝试获取股票名称
+                try:
+                    import akshare as ak
+
+                    df_info = ak.stock_individual_info_em(symbol)
+                    name_row = df_info[df_info["item"] == "股票简称"]
+                    if not name_row.empty:
+                        name = name_row["value"].iloc[0]
+                except Exception:
+                    pass  # 使用代码作为名称
             # 显示格式: 名称 - 代码
             display_name = f"{name}" if name == symbol else f"{name} - {symbol}"
             # 获取指标显示名称（避免下划线导致Markdown解析错误）
@@ -346,7 +356,7 @@ class StockBot:
                     div_info = ""
                     if "divergence" in sig:
                         div_info = f" [{sig['divergence']}]"
-                    msg += f"{emoji} {sig['type']}{div_info} `{sig['time']}` 💰{price:.4f}\n"
+                    msg += f"{emoji} {sig['type']}{div_info} `{sig['time']}` 💰{price:g}\n"
 
                 # 策略统计：金叉买入，死叉卖出
                 stats = self._calculate_strategy_stats(df, indicator, params, signals=signals)
