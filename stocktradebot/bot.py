@@ -74,7 +74,7 @@ class StockBot:
 `/tasks` 查看任务
 `/remove 任务ID` 移除任务
 `/backtest 品种 周期 指标` 回测查询
-`/optimize 品种` 策略优化
+`/optimize 品种 [周期...]` 策略优化
 `/list_type` 支持的类型
 """
         await update.message.reply_text(help_msg, parse_mode="Markdown")
@@ -751,17 +751,34 @@ class StockBot:
         args = context.args
 
         if not args:
+            periods = ", ".join(PERIOD_TYPES.keys())
             await update.message.reply_text(
                 "🔍 策略优化\n\n"
-                "用法: /optimize 品种\n"
-                "示例: /optimize Au99.99\n\n"
-                "遍历所有周期和指标，找出胜率最高的组合"
+                "用法: /optimize 品种 [周期...]\n"
+                "示例: /optimize Au99.99\n"
+                "示例: /optimize Au99.99 15min\n"
+                "示例: /optimize Au99.99 15min 30min 60min\n\n"
+                f"支持的周期: {periods}\n\n"
+                "不指定周期则遍历所有周期，找出胜率最高的组合"
             )
             return
 
         symbol = args[0]
+        
+        # 解析周期参数
+        all_periods = ["15min", "30min", "60min", "120min", "240min", "daily"]
+        filter_periods = []
+        for arg in args[1:]:
+            period = arg.lower()
+            if period in PERIOD_TYPES:
+                filter_periods.append(period)
+        
+        # 如果没有指定周期，使用所有周期
+        periods_to_test = filter_periods if filter_periods else all_periods
+        periods_desc = ", ".join(periods_to_test) if filter_periods else "所有周期"
+        
         await update.message.reply_text(
-            f"⏳ 正在分析 {symbol} 的所有策略组合，请稍候..."
+            f"⏳ 正在分析 {symbol} 的策略组合 ({periods_desc})，请稍候..."
         )
 
         # 获取品种名称
@@ -781,7 +798,6 @@ class StockBot:
                 pass  # 使用代码作为名称
 
         results = []
-        periods_to_test = ["15min", "30min", "60min", "120min", "240min", "daily"]
         indicators_base = ["MACD", "KDJ", "MA", "RSI"]
         # 背离策略单独测试，需要测试不同的 sensitivities (window)
         indicators_div = ["MACD_DIV", "KDJ_DIV", "MACD_COMBO", "KDJ_COMBO"]

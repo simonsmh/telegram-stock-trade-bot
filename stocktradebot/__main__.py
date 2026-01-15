@@ -174,56 +174,72 @@ class StockMonitor:
             divergences = TechnicalIndicators.detect_macd_divergence(
                 df, lookback=60, window=window
             )
-            current_idx = len(df) - 1
 
-            # 检查当前是否金叉/死叉
             macd_df = TechnicalIndicators.calculate_macd(df)
-            is_golden = (
-                macd_df["dif"].iloc[-2] <= macd_df["dea"].iloc[-2]
-                and macd_df["dif"].iloc[-1] > macd_df["dea"].iloc[-1]
-            )
-            is_death = (
-                macd_df["dif"].iloc[-2] >= macd_df["dea"].iloc[-2]
-                and macd_df["dif"].iloc[-1] < macd_df["dea"].iloc[-1]
-            )
+            
+            # 检查最近几根K线的信号（避免因轮询时机错过信号）
+            # 对于30分钟K线，检查最近3根可覆盖约1.5小时
+            check_range = min(3, len(df) - 1)
+            
+            for offset in range(check_range):
+                idx = len(df) - 1 - offset
+                if idx < 1:
+                    continue
+                    
+                is_golden = (
+                    macd_df["dif"].iloc[idx - 1] <= macd_df["dea"].iloc[idx - 1]
+                    and macd_df["dif"].iloc[idx] > macd_df["dea"].iloc[idx]
+                )
+                is_death = (
+                    macd_df["dif"].iloc[idx - 1] >= macd_df["dea"].iloc[idx - 1]
+                    and macd_df["dif"].iloc[idx] < macd_df["dea"].iloc[idx]
+                )
 
-            if not (is_golden or is_death):
-                return None
+                if not (is_golden or is_death):
+                    continue
 
-            # 检查背离有效性
-            for div in divergences:
-                # 只有背离还在有效期内（假设背离确认后10个周期内有效）才算 Combo
-                if div.peak2_idx <= current_idx <= div.peak2_idx + 10:
-                    if is_golden and div.divergence_type == "底背离":
-                        return "MACD_COMBO_BULLISH"
-                    if is_death and div.divergence_type == "顶背离":
-                        return "MACD_COMBO_BEARISH"
+                for div in divergences:
+                    # 只有背离还在有效期内（假设背离确认后10个周期内有效）才算 Combo
+                    if div.peak2_idx <= idx <= div.peak2_idx + 10:
+                        if is_golden and div.divergence_type == "底背离":
+                            return "MACD_COMBO_BULLISH"
+                        if is_death and div.divergence_type == "顶背离":
+                            return "MACD_COMBO_BEARISH"
 
         elif indicator == "KDJ_COMBO":
             divergences = TechnicalIndicators.detect_kdj_divergence(
                 df, lookback=60, window=window
             )
-            current_idx = len(df) - 1
 
             kdj_df = TechnicalIndicators.calculate_kdj(df)
-            is_golden = (
-                kdj_df["k"].iloc[-2] <= kdj_df["d"].iloc[-2]
-                and kdj_df["k"].iloc[-1] > kdj_df["d"].iloc[-1]
-            )
-            is_death = (
-                kdj_df["k"].iloc[-2] >= kdj_df["d"].iloc[-2]
-                and kdj_df["k"].iloc[-1] < kdj_df["d"].iloc[-1]
-            )
+            
+            # 检查最近几根K线的信号（避免因轮询时机错过信号）
+            # 对于30分钟K线，检查最近3根可覆盖约1.5小时
+            check_range = min(3, len(df) - 1)
+            
+            for offset in range(check_range):
+                idx = len(df) - 1 - offset
+                if idx < 1:
+                    continue
+                    
+                is_golden = (
+                    kdj_df["k"].iloc[idx - 1] <= kdj_df["d"].iloc[idx - 1]
+                    and kdj_df["k"].iloc[idx] > kdj_df["d"].iloc[idx]
+                )
+                is_death = (
+                    kdj_df["k"].iloc[idx - 1] >= kdj_df["d"].iloc[idx - 1]
+                    and kdj_df["k"].iloc[idx] < kdj_df["d"].iloc[idx]
+                )
 
-            if not (is_golden or is_death):
-                return None
+                if not (is_golden or is_death):
+                    continue
 
-            for div in divergences:
-                if div.peak2_idx <= current_idx <= div.peak2_idx + 10:
-                    if is_golden and div.divergence_type == "底背离":
-                        return "KDJ_COMBO_BULLISH"
-                    if is_death and div.divergence_type == "顶背离":
-                        return "KDJ_COMBO_BEARISH"
+                for div in divergences:
+                    if div.peak2_idx <= idx <= div.peak2_idx + 10:
+                        if is_golden and div.divergence_type == "底背离":
+                            return "KDJ_COMBO_BULLISH"
+                        if is_death and div.divergence_type == "顶背离":
+                            return "KDJ_COMBO_BEARISH"
 
         return None
 
