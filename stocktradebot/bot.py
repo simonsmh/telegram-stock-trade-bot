@@ -86,13 +86,14 @@ class StockBot:
 
         msg += "*周期类型:*\n"
         for key, info in PERIOD_TYPES.items():
-            msg += f"• `{key}` - {info['name']}\n"
+            escaped_name = escape_markdown(info['name'], version=1)
+            msg += f"• `{key}` - {escaped_name}\n"
 
         msg += "\n*指标类型:*\n"
         for key, info in INDICATOR_TYPES.items():
-            # Escape underscores in indicator keys for Telegram Markdown
-            escaped_key = key.replace("_", "\\_")
-            msg += f"• `{escaped_key}` - {info['name']} ({info['description']})\n"
+            escaped_name = escape_markdown(info['name'], version=1)
+            escaped_desc = escape_markdown(info['description'], version=1)
+            msg += f"• `{key}` - {escaped_name} ({escaped_desc})\n"
 
         msg += "\n*支持的品种:*\n"
         msg += "• `Au99.99` - 沪金AU9999\n"
@@ -348,12 +349,17 @@ class StockBot:
                     pass  # 使用代码作为名称
             # 显示格式: 名称 - 代码
             display_name = f"{name}" if name == symbol else f"{name} - {symbol}"
-            # 获取指标显示名称（避免下划线导致Markdown解析错误）
+            # 获取指标显示名称
             indicator_display = INDICATOR_TYPES.get(indicator, {}).get(
                 "name", indicator
             )
 
-            msg = f"📊 *{display_name} {period_name} {indicator_display} 回测*\n\n"
+            # Use escape_markdown for safe formatting
+            escaped_display_name = escape_markdown(display_name, version=1)
+            escaped_period_name = escape_markdown(period_name, version=1)
+            escaped_indicator_display = escape_markdown(indicator_display, version=1)
+
+            msg = f"📊 *{escaped_display_name} {escaped_period_name} {escaped_indicator_display} 回测*\n\n"
             msg += f"数据范围: {df['date'].iloc[0].strftime('%Y-%m-%d')} ~ {df['date'].iloc[-1].strftime('%Y-%m-%d %H:%M')}\n"
             msg += f"共 {len(df)} 根K线\n\n"
 
@@ -870,7 +876,8 @@ class StockBot:
 
         # 显示格式: 名称 - 代码
         display_name = f"{name}" if name == symbol else f"{name} - {symbol}"
-        msg = f"🏆 *{display_name} 策略优化结果*\n\n"
+        escaped_display_name = escape_markdown(display_name, version=1)
+        msg = f"🏆 *{escaped_display_name} 策略优化结果*\n\n"
         msg += f"数据起始: {min_start_date.strftime('%Y-%m-%d')}\n\n"
         msg += "按累计收益排序:\n"
 
@@ -879,7 +886,7 @@ class StockBot:
                 "🥇" if i == 1 else ("🥈" if i == 2 else ("🥉" if i == 3 else f"{i}."))
             )
             period_name = PERIOD_TYPES[r["period"]]["name"]
-            # 使用基础指标名查找显示名称，避免括号导致Markdown解析错误
+            # 使用基础指标名查找显示名称
             indicator_key = r.get("indicator_base", r["indicator"])
             indicator_name = INDICATOR_TYPES.get(indicator_key, {}).get(
                 "name", indicator_key
@@ -891,7 +898,12 @@ class StockBot:
                 if window:
                     indicator_name = f"{indicator_name} (Window={window})"
                     indicator_cmd = f"{indicator_key} Window={window}"
-            msg += f"{emoji} {period_name} {indicator_name}\n"
+            
+            # Use escape_markdown for safe formatting
+            escaped_period_name = escape_markdown(period_name, version=1)
+            escaped_indicator_name = escape_markdown(indicator_name, version=1)
+            
+            msg += f"{emoji} {escaped_period_name} {escaped_indicator_name}\n"
             msg += f"   胜率:{r['win_rate']:.1f}% 交易:{r['trades']}次 累计:{r['total_return']:.2f}%\n"
             msg += f"   `/backtest {symbol} {r['period']} {indicator_cmd}`\n"
             msg += f"   `/add {symbol} {r['period']} {indicator_cmd}`\n"
@@ -909,7 +921,12 @@ class StockBot:
             window = best["indicator_params"].get("window", "")
             if window:
                 best_indicator_cmd = f"{best_indicator_key} Window={window}"
-        msg += f"\n💡 *推荐* {display_name} {best_period_name} {best_indicator_name}"
+        
+        # Use escape_markdown for safe formatting
+        escaped_best_period_name = escape_markdown(best_period_name, version=1)
+        escaped_best_indicator_name = escape_markdown(best_indicator_name, version=1)
+        
+        msg += f"\n💡 *推荐* {escaped_display_name} {escaped_best_period_name} {escaped_best_indicator_name}"
         msg += f"\n📊 `/backtest {symbol} {best['period']} {best_indicator_cmd}`"
         msg += f"\n📝 `/add {symbol} {best['period']} {best_indicator_cmd}`"
 

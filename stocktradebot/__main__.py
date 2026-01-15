@@ -19,6 +19,7 @@ from stocktradebot.config import (
 from stocktradebot.stock_data import DataFetcher
 from stocktradebot.indicators import TechnicalIndicators
 from stocktradebot.bot import StockBot
+from telegram.helpers import escape_markdown
 import pandas as pd
 
 # 配置日志
@@ -278,11 +279,17 @@ class StockMonitor:
             if task.name == task.symbol
             else f"{task.name} - {task.symbol}"
         )
-        msg = f"{emoji} **{display_name}**\n\n"
-        msg += f"🔔 {indicator} {signal_name}\n"
+        
+        # Use escape_markdown for safe formatting
+        escaped_display_name = escape_markdown(display_name, version=1)
+        escaped_indicator = escape_markdown(indicator, version=1)
+        escaped_period_name = escape_markdown(period_name, version=1)
+        
+        msg = f"{emoji} *{escaped_display_name}*\n\n"
+        msg += f"🔔 {escaped_indicator} {signal_name}\n"
         msg += f"💰 价格: {price:.2f}\n"
         msg += f"⏰ {time_str}\n"
-        msg += f"📊 周期: {period_name}\n"
+        msg += f"📊 周期: {escaped_period_name}\n"
 
         # 若有额外参数，显示之
         params = getattr(task, "params", {}) or {}
