@@ -202,17 +202,24 @@ class StockBot:
                         params_list.append(f"{k}={v}")
                 params_str = f" | 参数: {', '.join(params_list)}"
 
-            # Escape underscores for Telegram Markdown (not needed inside backticks)
-            escaped_indicator = INDICATOR_TYPES[indicator]['name'].replace('_', '\\_')
+            # Use telegram's built-in escape_markdown for safe formatting
+            from telegram.helpers import escape_markdown
+            
+            escaped_display_name = escape_markdown(display_name, version=1)
+            escaped_indicator = escape_markdown(INDICATOR_TYPES[indicator]['name'], version=1)
+            escaped_period_name = escape_markdown(PERIOD_TYPES[period]['name'], version=1)
+            escaped_description = escape_markdown(INDICATOR_TYPES[indicator]['description'], version=1)
+            escaped_msg = escape_markdown(msg, version=1)
+            escaped_params_str = escape_markdown(params_str, version=1)
             task_id = f"{symbol}_{period}_{indicator}"
             
             await update.message.reply_text(
-                f"✅ {msg}\n\n"
-                f"📌 *{display_name}*\n"
-                f"   周期: {PERIOD_TYPES[period]['name']}\n"
-                f"   指标: {escaped_indicator}{params_str}\n"
+                f"✅ {escaped_msg}\n\n"
+                f"📌 *{escaped_display_name}*\n"
+                f"   周期: {escaped_period_name}\n"
+                f"   指标: {escaped_indicator}{escaped_params_str}\n"
                 f"   任务ID: `{task_id}`\n\n"
-                f"当{PERIOD_TYPES[period]['name']}出现{INDICATOR_TYPES[indicator]['description']}时会推送通知",
+                f"当{escaped_period_name}出现{escaped_description}时会推送通知",
                 parse_mode="Markdown",
             )
         else:
