@@ -5,6 +5,7 @@ Telegram Bot 模块
 
 import logging
 from telegram import Update
+from telegram.helpers import escape_markdown
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -203,8 +204,7 @@ class StockBot:
                 params_str = f" | 参数: {', '.join(params_list)}"
 
             # Use telegram's built-in escape_markdown for safe formatting
-            from telegram.helpers import escape_markdown
-            
+
             escaped_display_name = escape_markdown(display_name, version=1)
             escaped_indicator = escape_markdown(INDICATOR_TYPES[indicator]['name'], version=1)
             escaped_period_name = escape_markdown(PERIOD_TYPES[period]['name'], version=1)
@@ -274,11 +274,14 @@ class StockBot:
                         params_list.append(f"{k}={v}")
                 params_str = f" | 参数: {', '.join(params_list)}"
 
-            # Escape underscores for Telegram Markdown (not needed inside backticks)
-            escaped_indicator = task.indicator.replace('_', '\\_')
+            # Use escape_markdown for safe formatting
+            escaped_display_name = escape_markdown(display_name, version=1)
+            escaped_indicator = escape_markdown(task.indicator, version=1)
+            escaped_period_name = escape_markdown(period_name, version=1)
+            escaped_params_str = escape_markdown(params_str, version=1)
             
-            msg += f"{i}. {status} *{display_name}*\n"
-            msg += f"   周期: {period_name} | 指标: {escaped_indicator}{params_str}\n"
+            msg += f"{i}. {status} *{escaped_display_name}*\n"
+            msg += f"   周期: {escaped_period_name} | 指标: {escaped_indicator}{escaped_params_str}\n"
             msg += f"   ID: `{task.task_id}`\n\n"
 
         msg += "使用 /remove 任务ID 移除任务"
