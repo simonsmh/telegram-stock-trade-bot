@@ -17,6 +17,7 @@ from stocktradebot.config import (
     MonitorTask,
 )
 from stocktradebot.stock_data import DataFetcher
+from stocktradebot.crypto_data import CryptoDataFetcher
 from stocktradebot.indicators import TechnicalIndicators
 from stocktradebot.bot import StockBot
 from telegram.helpers import escape_markdown
@@ -30,12 +31,13 @@ logger = logging.getLogger(__name__)
 
 
 class StockMonitor:
-    """股票/期货监控器"""
+    """股票/期货/加密货币监控器"""
 
     def __init__(self, bot: StockBot, config: ConfigManager):
         self.bot = bot
         self.config = config
         self.data_fetcher = DataFetcher()
+        self.crypto_fetcher = CryptoDataFetcher()
 
     def get_data_for_task(self, task: MonitorTask) -> pd.DataFrame:
         """根据任务获取对应的数据"""
@@ -43,7 +45,21 @@ class StockMonitor:
         period = task.period
 
         # 判断品种类型
-        if symbol.upper().startswith("AU") or symbol.upper().startswith("AG"):
+        if StockBot._is_crypto_symbol(symbol):
+            # 加密货币
+            period_map = {
+                "daily": "daily",
+                "240min": "4H",
+                "120min": "2H",
+                "60min": "1H",
+                "30min": "30m",
+                "15min": "15m",
+                "5min": "5m",
+                "1min": "1m",
+            }
+            bar = period_map.get(period, "1H")
+            return self.crypto_fetcher.get_crypto_history(symbol, days=300, period=bar)
+        elif symbol.upper().startswith("AU") or symbol.upper().startswith("AG"):
             # 贵金属
             if period == "daily":
                 # 日线数据 - 使用现货历史数据

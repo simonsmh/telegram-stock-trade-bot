@@ -13,6 +13,7 @@ from telegram.ext import (
 )
 from .config import ConfigManager, PERIOD_TYPES, INDICATOR_TYPES
 from .stock_data import DataFetcher
+from .crypto_data import CryptoDataFetcher
 from .indicators import TechnicalIndicators
 
 logger = logging.getLogger(__name__)
@@ -25,14 +26,55 @@ class StockBot:
         self.token = token
         self.config = config_manager
         self.data_fetcher = DataFetcher()
+        self.crypto_fetcher = CryptoDataFetcher()
         self.app: Application = None
+
+    @staticmethod
+    def _is_crypto_symbol(symbol: str) -> bool:
+        """
+        判断是否为加密货币符号
+        
+        识别规则：
+        - 包含交易对后缀：-USDT, -USDC, -BTC, -ETH
+        - 常见加密货币简称：BTC, ETH, SOL, DOGE 等
+        - 排除：6位数字（A股）、AU/AG开头（贵金属）
+        """
+        symbol = symbol.upper().strip()
+        
+        # 包含交易对后缀
+        crypto_suffixes = ['-USDT', '-USDC', '-BTC', '-ETH', '-BUSD']
+        if any(symbol.endswith(suffix) for suffix in crypto_suffixes):
+            return True
+        
+        # 排除A股（6位数字）
+        clean_symbol = symbol.replace('SH', '').replace('SZ', '').replace('.', '')
+        if clean_symbol.isdigit() and len(clean_symbol) == 6:
+            return False
+        
+        # 排除贵金属期货
+        if symbol.startswith('AU') or symbol.startswith('AG'):
+            return False
+        
+        # 常见加密货币简称（无数字，纯字母，长度2-6）
+        common_cryptos = {
+            'BTC', 'ETH', 'LTC', 'BCH', 'XRP', 'ADA', 'DOT', 'LINK',
+            'UNI', 'SOL', 'DOGE', 'SHIB', 'MATIC', 'AVAX', 'ATOM',
+            'FIL', 'TRX', 'ETC', 'XLM', 'VET', 'THETA', 'EOS', 'AAVE',
+            'XMR', 'NEO', 'MKR', 'COMP', 'SNX', 'YFI', 'SUSHI', 'CRV',
+            'APE', 'SAND', 'MANA', 'AXS', 'GMT', 'OP', 'ARB', 'SUI',
+            'PEPE', 'WIF', 'BONK', 'FLOKI', 'ORDI', 'NEAR', 'INJ', 'TIA'
+        }
+        if symbol in common_cryptos:
+            return True
+        
+        return False
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理 /start 命令"""
         chat_id = update.effective_chat.id
         self.config.get_user(chat_id)
 
-        welcome_msg = """
+        welcome_msg = r"""
 🤖 *股票/期货技术指标监控Bot*
 
 欢迎使用！支持多周期、多指标的实时监控，当出现金叉/死叉时自动推送通知。
@@ -47,13 +89,13 @@ class StockBot:
 • `/add Au99.99 60min KDJ` - 沪金60分钟KDJ
 
 *全部命令:*
-/add /tasks /remove /backtest /list\\_type /help
+/add /tasks /remove /backtest /list\_type /help
 """
         await update.message.reply_text(welcome_msg, parse_mode="Markdown")
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理 /help 命令"""
-        help_msg = """
+        help_msg = r"""
 📖 *详细使用帮助*
 
 ━━━━━ 添加监控任务 ━━━━━
@@ -170,8 +212,17 @@ class StockBot:
 
         # 获取品种名称
         name = symbol
-        if symbol.upper().startswith("AU") or symbol.upper().startswith("AG"):
-            pass  # 已经是标准名称
+        if self._is_crypto_symbol(symbol):
+            # 加密货币 - 从支持列表获取名称
+            normalized = CryptoDataFetcher.normalize_symbol(symbol)
+            crypto_list = CryptoDataFetcher.get_supported_symbols()
+            if normalized in crypto_list:
+                name = crypto_list[normalized]["name"]
+            else:
+                # 使用标准化后的交易对作为名称
+                name = normalized.split("-")[0]
+        elif symbol.upper().startswith("AU") or symbol.upper().startswith("AG"):
+            pass  # 贵金属已经是标准名称
         else:
             # 快速获取股票名称
             try:
@@ -438,7 +489,15 @@ class StockBot:
             period_name = PERIOD_TYPES[period]["name"]
             # 获取品种名称
             name = symbol
-            if symbol.upper().startswith("AU") or symbol.upper().startswith("AG"):
+            if self._is_crypto_symbol(symbol):
+                # 加密货币
+                normalized = CryptoDataFetcher.normalize_symbol(symbol)
+                crypto_list = CryptoDataFetcher.get_supported_symbols()
+                if normalized in crypto_list:
+                    name = crypto_list[normalized]["name"]
+                else:
+                    name = normalized.split("-")[0]
+            elif symbol.upper().startswith("AU") or symbol.upper().startswith("AG"):
                 name = "沪金" if "AU" in symbol.upper() else "沪银"
             else:
                 # 尝试获取股票名称
@@ -503,7 +562,23 @@ class StockBot:
 
     def _get_backtest_data(self, symbol: str, period: str):
         """获取回测数据"""
-        if symbol.upper().startswith("AU") or symbol.upper().startswith("AG"):
+        # 加密货币
+        if self._is_crypto_symbol(symbol):
+            # 周期映射
+            period_map = {
+                "daily": "daily",
+                "240min": "4H",
+                "120min": "2H", 
+                "60min": "1H",
+                "30min": "30m",
+                "15min": "15m",
+                "5min": "5m",
+                "1min": "1m",
+            }
+            bar = period_map.get(period, "1H")
+            return self.crypto_fetcher.get_crypto_history(symbol, days=300, period=bar)
+        # 贵金属期货
+        elif symbol.upper().startswith("AU") or symbol.upper().startswith("AG"):
             if period == "daily":
                 return self.data_fetcher.get_gold_spot_daily(symbol)
             else:
@@ -903,7 +978,15 @@ class StockBot:
 
         # 获取品种名称
         name = symbol
-        if symbol.upper().startswith("AU") or symbol.upper().startswith("AG"):
+        if self._is_crypto_symbol(symbol):
+            # 加密货币
+            normalized = CryptoDataFetcher.normalize_symbol(symbol)
+            crypto_list = CryptoDataFetcher.get_supported_symbols()
+            if normalized in crypto_list:
+                name = crypto_list[normalized]["name"]
+            else:
+                name = normalized.split("-")[0]
+        elif symbol.upper().startswith("AU") or symbol.upper().startswith("AG"):
             name = "沪金" if "AU" in symbol.upper() else "沪银"
         else:
             # 尝试获取股票名称
