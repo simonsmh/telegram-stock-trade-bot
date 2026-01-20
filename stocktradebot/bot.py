@@ -226,6 +226,82 @@ class StockBot:
         else:
             await update.message.reply_text(f"❌ {msg}")
 
+    def _get_task_status(self, task) -> dict:
+        """
+        获取任务的当前状态信息
+        
+        Returns:
+            dict: {
+                'trend': '多头' | '空头' | '未知',
+                'last_signal': '金叉' | '死叉' | None,
+                'last_signal_time': str,
+                'last_signal_price': float,
+                'current_price': float,
+                'indicator_values': str
+            }
+        """
+        result = {
+            'trend': '未知',
+            'last_signal': None,
+            'last_signal_time': None,
+            'last_signal_price': None,
+            'current_price': None,
+            'indicator_values': ''
+        }
+        
+        try:
+            # 获取回测数据
+            df = self._get_backtest_data(task.symbol, task.period)
+            if df is None or len(df) < 30:
+                return result
+            
+            result['current_price'] = df['close'].iloc[-1]
+            
+            # 获取额外参数
+            params = getattr(task, 'params', {}) or {}
+            indicator = task.indicator
+            
+            # 检测信号获取最近操作点位
+            signals = self._detect_signals(df, indicator, params)
+            if signals:
+                last_sig = signals[-1]
+                result['last_signal'] = last_sig['type']
+                result['last_signal_time'] = last_sig['time']
+                result['last_signal_price'] = last_sig.get('price', 0)
+            
+            # 判断当前多头/空头状态
+            if indicator in ['MACD', 'MACD_DIV', 'MACD_COMBO']:
+                macd_df = TechnicalIndicators.calculate_macd(df)
+                dif = macd_df['dif'].iloc[-1]
+                dea = macd_df['dea'].iloc[-1]
+                result['trend'] = '多头' if dif > dea else '空头'
+                result['indicator_values'] = f"DIF:{dif:.4f} DEA:{dea:.4f}"
+            elif indicator in ['KDJ', 'KDJ_DIV', 'KDJ_COMBO']:
+                kdj_df = TechnicalIndicators.calculate_kdj(df)
+                k = kdj_df['k'].iloc[-1]
+                d = kdj_df['d'].iloc[-1]
+                result['trend'] = '多头' if k > d else '空头'
+                result['indicator_values'] = f"K:{k:.1f} D:{d:.1f}"
+            elif indicator == 'MA':
+                ma_dict = TechnicalIndicators.calculate_ma(df, [5, 10])
+                ma5 = ma_dict[5].iloc[-1]
+                ma10 = ma_dict[10].iloc[-1]
+                result['trend'] = '多头' if ma5 > ma10 else '空头'
+                result['indicator_values'] = f"MA5:{ma5:.2f} MA10:{ma10:.2f}"
+            elif indicator == 'RSI':
+                rsi_df = TechnicalIndicators.calculate_rsi(df)
+                rsi = rsi_df['rsi'].iloc[-1]
+                if rsi > 50:
+                    result['trend'] = '多头'
+                elif rsi < 50:
+                    result['trend'] = '空头'
+                result['indicator_values'] = f"RSI:{rsi:.1f}"
+                
+        except Exception as e:
+            logger.error(f"获取任务状态失败 {task.task_id}: {e}")
+        
+        return result
+
     async def remove_task(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理 /remove 命令 - 移除任务"""
         chat_id = update.effective_chat.id
@@ -242,7 +318,7 @@ class StockBot:
             await update.message.reply_text(f"❌ 未找到任务: {task_id}")
 
     async def list_tasks(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """处理 /tasks 命令 - 列出用户任务"""
+        """处理 /tasks 命令 - 列出用户任务及其当前状态"""
         chat_id = update.effective_chat.id
         tasks = self.config.get_user_tasks(chat_id)
 
@@ -252,9 +328,12 @@ class StockBot:
             )
             return
 
+        # 先发送加载提示
+        loading_msg = await update.message.reply_text("⏳ 正在获取任务状态...")
+
         msg = "📋 *我的监控任务*\n\n"
         for i, task in enumerate(tasks, 1):
-            status = "✅" if task.enabled else "⏸️"
+            status_icon = "✅" if task.enabled else "⏸️"
             period_name = PERIOD_TYPES.get(task.period, {}).get("name", task.period)
             # 显示格式: 名称 - 代码
             display_name = (
@@ -275,17 +354,42 @@ class StockBot:
                         params_list.append(f"{k}={v}")
                 params_str = f" | 参数: {', '.join(params_list)}"
 
+            # 获取任务当前状态
+            task_status = self._get_task_status(task)
+            
+            # 趋势显示
+            trend_emoji = "📈" if task_status['trend'] == '多头' else ("📉" if task_status['trend'] == '空头' else "➖")
+            trend_str = f"{trend_emoji} {task_status['trend']}"
+            
+            # 最近信号显示
+            last_signal_str = ""
+            if task_status['last_signal']:
+                signal_emoji = "🟢" if task_status['last_signal'] == '金叉' else "🔴"
+                last_signal_str = f"\n   {signal_emoji} 最近: {task_status['last_signal']}"
+                if task_status['last_signal_price']:
+                    last_signal_str += f" 💰{task_status['last_signal_price']:g}"
+                if task_status['last_signal_time']:
+                    # 只显示时间部分，日期太长
+                    time_part = task_status['last_signal_time'].split(' ')[-1] if ' ' in task_status['last_signal_time'] else task_status['last_signal_time']
+                    last_signal_str += f" ({time_part})"
+
             # Use escape_markdown for safe formatting
             escaped_display_name = escape_markdown(display_name, version=1)
             escaped_indicator = escape_markdown(task.indicator, version=1)
             escaped_period_name = escape_markdown(period_name, version=1)
             escaped_params_str = escape_markdown(params_str, version=1)
+            escaped_trend_str = escape_markdown(trend_str, version=1)
+            escaped_last_signal_str = escape_markdown(last_signal_str, version=1)
             
-            msg += f"{i}. {status} *{escaped_display_name}*\n"
+            msg += f"{i}. {status_icon} *{escaped_display_name}*\n"
             msg += f"   周期: {escaped_period_name} | 指标: {escaped_indicator}{escaped_params_str}\n"
+            msg += f"   当前: {escaped_trend_str}{escaped_last_signal_str}\n"
             msg += f"   ID: `{task.task_id}`\n\n"
 
         msg += "使用 /remove 任务ID 移除任务"
+        
+        # 删除加载提示，发送结果
+        await loading_msg.delete()
         await update.message.reply_text(msg, parse_mode="Markdown")
 
     async def backtest(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
