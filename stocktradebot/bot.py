@@ -418,9 +418,11 @@ class StockBot:
             # 获取任务当前状态
             task_status = self._get_task_status(task)
             
-            # 趋势显示
+            # 趋势显示（包含当前价格）
             trend_emoji = "📈" if task_status['trend'] == '多头' else ("📉" if task_status['trend'] == '空头' else "➖")
-            trend_str = f"{trend_emoji} {task_status['trend']}"
+            current_price = task_status.get('current_price')
+            price_str = f" 💰{current_price:g}" if current_price else ""
+            trend_str = f"{trend_emoji} {task_status['trend']}{price_str}"
             
             # 最近信号显示
             last_signal_str = ""
@@ -563,7 +565,8 @@ class StockBot:
                     msg += f"累计收益: {stats['total_return']:.2f}%\n"
 
                 # 当前状态
-                msg += "\n*当前状态:*\n"
+                current_price = df['close'].iloc[-1]
+                msg += f"\n*当前状态:* 💰{current_price:g}\n"
                 msg += sig.get("status", "")
             else:
                 msg += "未发现信号"
