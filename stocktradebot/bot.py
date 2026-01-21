@@ -430,9 +430,13 @@ class StockBot:
                 if task_status['last_signal_price']:
                     last_signal_str += f" 💰{task_status['last_signal_price']:g}"
                 if task_status['last_signal_time']:
-                    # 只显示时间部分，日期太长
-                    time_part = task_status['last_signal_time'].split(' ')[-1] if ' ' in task_status['last_signal_time'] else task_status['last_signal_time']
-                    last_signal_str += f" ({time_part})"
+                    # 显示日期和时间，格式：MM-DD HH:MM
+                    full_time = task_status['last_signal_time']
+                    # 输入格式: "2026-01-21 11:20" -> 输出: "01-21 11:20"
+                    if ' ' in full_time and len(full_time) >= 16:
+                        last_signal_str += f" ({full_time[5:16]})"
+                    else:
+                        last_signal_str += f" ({full_time})"
 
             # Use escape_markdown for safe formatting
             escaped_display_name = escape_markdown(display_name, version=1)
