@@ -308,44 +308,54 @@ class StockBot:
             
             result['current_price'] = df['close'].iloc[-1]
             
-            # 获取额外参数
-            params = getattr(task, 'params', {}) or {}
+            # 获取指标类型
             indicator = task.indicator
             
-            # 检测信号获取最近操作点位
-            signals = self._detect_signals(df, indicator, params)
-            if signals:
-                last_sig = signals[-1]
+            # 对于 _COMBO/_DIV 类型，找基础指标的最近金叉/死叉来显示趋势
+            # 这样即使 COMBO 策略没有背离确认信号，也能显示当前趋势
+            base_indicator = indicator.replace('_DIV', '').replace('_COMBO', '')
+            
+            # 检测基础指标的金叉死叉信号（用于趋势显示）
+            base_signals = self._detect_signals(df, base_indicator, {})
+            if base_signals:
+                last_sig = base_signals[-1]
                 result['last_signal'] = last_sig['type']
                 result['last_signal_time'] = last_sig['time']
                 result['last_signal_price'] = last_sig.get('price', 0)
+                # 趋势基于最近信号：金叉=多头，死叉=空头
+                result['trend'] = '多头' if last_sig['type'] == '金叉' else '空头'
             
-            # 判断当前多头/空头状态
-            if indicator in ['MACD', 'MACD_DIV', 'MACD_COMBO']:
+            # 获取指标当前值用于显示
+            if base_indicator == 'MACD':
                 macd_df = TechnicalIndicators.calculate_macd(df)
                 dif = macd_df['dif'].iloc[-1]
                 dea = macd_df['dea'].iloc[-1]
-                result['trend'] = '多头' if dif > dea else '空头'
+                # 如果没有信号记录，则用当前指标值判断
+                if not base_signals:
+                    result['trend'] = '多头' if dif > dea else '空头'
                 result['indicator_values'] = f"DIF:{dif:.4f} DEA:{dea:.4f}"
-            elif indicator in ['KDJ', 'KDJ_DIV', 'KDJ_COMBO']:
+            elif base_indicator == 'KDJ':
                 kdj_df = TechnicalIndicators.calculate_kdj(df)
                 k = kdj_df['k'].iloc[-1]
                 d = kdj_df['d'].iloc[-1]
-                result['trend'] = '多头' if k > d else '空头'
+                if not base_signals:
+                    result['trend'] = '多头' if k > d else '空头'
                 result['indicator_values'] = f"K:{k:.1f} D:{d:.1f}"
             elif indicator == 'MA':
                 ma_dict = TechnicalIndicators.calculate_ma(df, [5, 10])
                 ma5 = ma_dict[5].iloc[-1]
                 ma10 = ma_dict[10].iloc[-1]
-                result['trend'] = '多头' if ma5 > ma10 else '空头'
+                if not base_signals:
+                    result['trend'] = '多头' if ma5 > ma10 else '空头'
                 result['indicator_values'] = f"MA5:{ma5:.2f} MA10:{ma10:.2f}"
             elif indicator == 'RSI':
                 rsi_df = TechnicalIndicators.calculate_rsi(df)
                 rsi = rsi_df['rsi'].iloc[-1]
-                if rsi > 50:
-                    result['trend'] = '多头'
-                elif rsi < 50:
-                    result['trend'] = '空头'
+                if not base_signals:
+                    if rsi > 50:
+                        result['trend'] = '多头'
+                    elif rsi < 50:
+                        result['trend'] = '空头'
                 result['indicator_values'] = f"RSI:{rsi:.1f}"
                 
         except Exception as e:
