@@ -344,16 +344,22 @@ class StockMonitor:
             # 检测信号
             signal = self.detect_signal(task, df)
 
-            if signal and signal != task.last_signal:
-                # 新信号，发送通知
-                message = self.format_signal_message(task, signal, df)
-                await self.bot.send_alert(chat_id, message)
+            if signal:
+                # 构建带时间戳的信号ID，避免连续相同类型信号被忽略
+                # 格式: SIGNAL_TYPE@YYYY-MM-DD HH:MM
+                signal_time = df["date"].iloc[-1].strftime("%Y-%m-%d %H:%M")
+                signal_with_time = f"{signal}@{signal_time}"
+                
+                if signal_with_time != task.last_signal:
+                    # 新信号，发送通知
+                    message = self.format_signal_message(task, signal, df)
+                    await self.bot.send_alert(chat_id, message)
 
-                # 更新最后信号状态
-                self.config.update_task_signal(chat_id, task.task_id, signal)
-                logger.info(
-                    f"发送信号 chat_id={chat_id}, task={task.task_id}, signal={signal}"
-                )
+                    # 更新最后信号状态（包含时间戳）
+                    self.config.update_task_signal(chat_id, task.task_id, signal_with_time)
+                    logger.info(
+                        f"发送信号 chat_id={chat_id}, task={task.task_id}, signal={signal_with_time}"
+                    )
 
         except Exception as e:
             logger.error(f"检查任务失败 {task.task_id}: {e}")
