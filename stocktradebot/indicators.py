@@ -263,20 +263,23 @@ class TechnicalIndicators:
 
     @staticmethod
     def detect_macd_divergence(
-        df: pd.DataFrame, lookback: int = 60, window: int = 2
+        df: pd.DataFrame, lookback: int = None, window: int = 2
     ) -> list[DivergenceData]:
         """
         检测MACD背离
         
         Args:
             df: K线数据DataFrame
-            lookback: 回溯周期数
+            lookback: 回溯周期数，None表示使用全部数据（推荐）
+                     注意：对于短周期数据(1min/5min)，lookback过小会导致检测不到背离
             window: 峰值检测窗口大小
         
         Returns:
             检测到的背离列表
         """
-        if len(df) < lookback:
+        if lookback is None:
+            lookback = len(df)
+        elif len(df) < lookback:
             lookback = len(df)
         if lookback < 30:
             return []
@@ -395,20 +398,23 @@ class TechnicalIndicators:
     
     @staticmethod
     def detect_kdj_divergence(
-        df: pd.DataFrame, lookback: int = 60, window: int = 2
+        df: pd.DataFrame, lookback: int = None, window: int = 2
     ) -> list[DivergenceData]:
         """
         检测KDJ背离（使用J值）
         
         Args:
             df: K线数据DataFrame
-            lookback: 回溯周期数
+            lookback: 回溯周期数，None表示使用全部数据（推荐）
+                     注意：对于短周期数据(1min/5min)，lookback过小会导致检测不到背离
             window: 峰值检测窗口大小
         
         Returns:
             检测到的背离列表
         """
-        if len(df) < lookback:
+        if lookback is None:
+            lookback = len(df)
+        elif len(df) < lookback:
             lookback = len(df)
         if lookback < 30:
             return []
@@ -521,10 +527,15 @@ class TechnicalIndicators:
     
     @staticmethod
     def detect_all_divergences(
-        df: pd.DataFrame, lookback: int = 60, window: int = 2
+        df: pd.DataFrame, lookback: int = None, window: int = 2
     ) -> dict:
         """
         检测所有背离
+        
+        Args:
+            df: K线数据DataFrame
+            lookback: 回溯周期数，None表示使用全部数据（推荐）
+            window: 峰值检测窗口大小
         
         Returns:
             {"macd": [...], "kdj": [...]}
