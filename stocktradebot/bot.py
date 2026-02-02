@@ -4,6 +4,7 @@ Telegram Bot 模块
 """
 
 import logging
+from datetime import datetime
 from telegram import Update
 from telegram.helpers import escape_markdown
 from telegram.ext import (
@@ -15,6 +16,7 @@ from .config import ConfigManager, PERIOD_TYPES, INDICATOR_TYPES
 from .stock_data import DataFetcher
 from .crypto_data import CryptoDataFetcher
 from .indicators import TechnicalIndicators
+from .error_handler import error_handler
 
 logger = logging.getLogger(__name__)
 
@@ -1170,4 +1172,8 @@ class StockBot:
             .build()
         )
         self.setup_handlers()
+
+        # 注册全局错误处理器
+        self.app.add_error_handler(error_handler)
+        logger.info("✅ 全局错误处理器已注册")
         return self.app
