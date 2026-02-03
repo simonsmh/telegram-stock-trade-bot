@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from enum import Enum
 
 
@@ -33,6 +33,12 @@ INDICATOR_TYPES = {
     "KDJ_DIV": {"name": "KDJ背离", "description": "KDJ背离信号"},
     "MACD_COMBO": {"name": "MACD组合", "description": "背离+金叉确认"},
     "KDJ_COMBO": {"name": "KDJ组合", "description": "背离+金叉确认"},
+    "STRATEGY_MACD_KDJ": {"name": "MACD+KDJ策略", "description": "MACD趋势+KDJ动量组合"},
+    "STRATEGY_MACD_RSI": {"name": "MACD+RSI策略", "description": "MACD趋势+RSI强度组合"},
+    "STRATEGY_KDJ_RSI": {"name": "KDJ+RSI策略", "description": "KDJ动量+RSI强度组合"},
+    "STRATEGY_MACD_KDJ_RSI": {"name": "MACD+KDJ+RSI策略", "description": "MACD+KDJ+RSI综合策略"},
+    "STRATEGY_MACD_MA": {"name": "MACD+MA策略", "description": "MACD趋势+均线支撑组合"},
+    "STRATEGY_KDJ_MA": {"name": "KDJ+MA策略", "description": "KDJ动量+均线趋势组合"},
 }
 
 # 支持的品种类型
@@ -57,7 +63,32 @@ class MonitorTask:
     indicator: str  # 指标，如 MACD、KDJ
     enabled: bool = True
     last_signal: str = ""  # 上次信号状态（用于避免重复推送）
+    last_alert_time: str = ""  # 上次提醒时间，ISO格式字符串
     params: dict = field(default_factory=dict)  # 额外参数，如 {"order": 5}
+
+
+@dataclass
+class StrategyConfig:
+    """策略配置"""
+
+    strategy_id: str
+    name: str
+    description: str
+    indicator_weights: Dict[str, float] = field(default_factory=dict)
+    timeframe_weights: Dict[str, float] = field(default_factory=dict)
+    parameters: Dict[str, Any] = field(default_factory=dict)
+    created_at: str = field(default_factory=lambda: "")
+    updated_at: str = field(default_factory=lambda: "")
+
+
+@dataclass
+class UserStrategy:
+    """用户策略配置"""
+
+    strategy_config: StrategyConfig
+    symbols: List[str] = field(default_factory=list)
+    periods: List[str] = field(default_factory=list)
+    enabled: bool = True
 
 
 @dataclass
@@ -66,6 +97,7 @@ class UserConfig:
 
     chat_id: int
     tasks: list[MonitorTask] = field(default_factory=list)
+    strategies: list[UserStrategy] = field(default_factory=list)
     enabled: bool = True
 
 
@@ -79,6 +111,52 @@ class ConfigManager:
         self.users: dict[int, UserConfig] = {}
         self._load()
 
+    # 预定义策略配置
+    PREDEFINED_STRATEGIES = {
+        "STRATEGY_MACD_KDJ": {
+            "name": "MACD+KDJ策略",
+            "description": "MACD趋势+KDJ动量组合策略",
+            "indicator_weights": {"MACD": 0.6, "KDJ": 0.4},
+            "timeframe_weights": {"60min": 0.4, "daily": 0.6},
+            "parameters": {"window": 2, "lookback": 60}
+        },
+        "STRATEGY_MACD_RSI": {
+            "name": "MACD+RSI策略",
+            "description": "MACD趋势+RSI强度组合策略",
+            "indicator_weights": {"MACD": 0.7, "RSI": 0.3},
+            "timeframe_weights": {"30min": 0.3, "60min": 0.7},
+            "parameters": {"window": 2, "lookback": 60}
+        },
+        "STRATEGY_KDJ_RSI": {
+            "name": "KDJ+RSI策略",
+            "description": "KDJ动量+RSI强度组合策略",
+            "indicator_weights": {"KDJ": 0.5, "RSI": 0.5},
+            "timeframe_weights": {"15min": 0.4, "60min": 0.6},
+            "parameters": {"window": 2, "lookback": 60}
+        },
+        "STRATEGY_MACD_KDJ_RSI": {
+            "name": "MACD+KDJ+RSI策略",
+            "description": "MACD+KDJ+RSI综合策略",
+            "indicator_weights": {"MACD": 0.5, "KDJ": 0.3, "RSI": 0.2},
+            "timeframe_weights": {"60min": 0.4, "daily": 0.6},
+            "parameters": {"window": 2, "lookback": 60}
+        },
+        "STRATEGY_MACD_MA": {
+            "name": "MACD+MA策略",
+            "description": "MACD趋势+均线支撑组合策略",
+            "indicator_weights": {"MACD": 0.6, "MA": 0.4},
+            "timeframe_weights": {"60min": 0.4, "daily": 0.6},
+            "parameters": {"window": 2, "lookback": 60}
+        },
+        "STRATEGY_KDJ_MA": {
+            "name": "KDJ+MA策略",
+            "description": "KDJ动量+均线趋势组合策略",
+            "indicator_weights": {"KDJ": 0.5, "MA": 0.5},
+            "timeframe_weights": {"30min": 0.3, "60min": 0.7},
+            "parameters": {"window": 2, "lookback": 60}
+        }
+    }
+
     def _load(self):
         """加载用户配置"""
         if self.users_file.exists():
@@ -90,9 +168,23 @@ class ConfigManager:
                         tasks = [
                             MonitorTask(**task) for task in user_data.get("tasks", [])
                         ]
+
+                        # 加载策略配置
+                        strategies = []
+                        for strategy_data in user_data.get("strategies", []):
+                            strategy_config = StrategyConfig(**strategy_data.get("strategy_config"))
+                            user_strategy = UserStrategy(
+                                strategy_config=strategy_config,
+                                symbols=strategy_data.get("symbols", []),
+                                periods=strategy_data.get("periods", []),
+                                enabled=strategy_data.get("enabled", True)
+                            )
+                            strategies.append(user_strategy)
+
                         self.users[chat_id] = UserConfig(
                             chat_id=chat_id,
                             tasks=tasks,
+                            strategies=strategies,
                             enabled=user_data.get("enabled", True),
                         )
             except Exception as e:
@@ -105,6 +197,14 @@ class ConfigManager:
             data[str(chat_id)] = {
                 "chat_id": user_config.chat_id,
                 "tasks": [asdict(task) for task in user_config.tasks],
+                "strategies": [
+                    {
+                        "strategy_config": asdict(strategy.strategy_config),
+                        "symbols": strategy.symbols,
+                        "periods": strategy.periods,
+                        "enabled": strategy.enabled
+                    } for strategy in user_config.strategies
+                ],
                 "enabled": user_config.enabled,
             }
         with open(self.users_file, "w", encoding="utf-8") as f:
@@ -198,6 +298,116 @@ class ConfigManager:
                 task.last_signal = signal
                 self._save()
                 return
+
+    def update_task_alert_time(self, chat_id: int, task_id: str, alert_time: str):
+        """更新任务的最后提醒时间"""
+        user = self.get_user(chat_id)
+        for task in user.tasks:
+            if task.task_id == task_id:
+                task.last_alert_time = alert_time
+                self._save()
+                return
+
+    # 策略管理方法
+    def add_strategy(self, chat_id: int, strategy_id: str, symbols: List[str],
+                    periods: List[str], enabled: bool = True) -> tuple[bool, str]:
+        """
+        添加策略配置
+
+        Args:
+            chat_id: 用户聊天ID
+            strategy_id: 策略ID
+            symbols: 监控品种列表
+            periods: 监控周期列表
+            enabled: 是否启用
+
+        Returns:
+            (成功, 消息)
+        """
+        user = self.get_user(chat_id)
+
+        # 检查策略是否已存在
+        for strategy in user.strategies:
+            if strategy.strategy_config.strategy_id == strategy_id:
+                return False, f"策略已存在: {strategy_id}"
+
+        # 获取策略配置
+        if strategy_id in self.PREDEFINED_STRATEGIES:
+            strategy_config = StrategyConfig(
+                strategy_id=strategy_id,
+                **self.PREDEFINED_STRATEGIES[strategy_id]
+            )
+        else:
+            return False, f"不支持的策略类型: {strategy_id}"
+
+        # 创建用户策略
+        user_strategy = UserStrategy(
+            strategy_config=strategy_config,
+            symbols=symbols,
+            periods=periods,
+            enabled=enabled
+        )
+
+        user.strategies.append(user_strategy)
+        self._save()
+        return True, f"已添加策略: {strategy_config.name}"
+
+    def remove_strategy(self, chat_id: int, strategy_id: str) -> bool:
+        """
+        移除策略配置
+
+        Args:
+            chat_id: 用户聊天ID
+            strategy_id: 策略ID
+
+        Returns:
+            是否成功
+        """
+        user = self.get_user(chat_id)
+        for i, strategy in enumerate(user.strategies):
+            if strategy.strategy_config.strategy_id == strategy_id:
+                user.strategies.pop(i)
+                self._save()
+                return True
+        return False
+
+    def get_user_strategies(self, chat_id: int) -> List[UserStrategy]:
+        """获取用户的所有策略"""
+        user = self.get_user(chat_id)
+        return user.strategies
+
+    def get_strategy(self, chat_id: int, strategy_id: str) -> Optional[UserStrategy]:
+        """获取用户的特定策略"""
+        user = self.get_user(chat_id)
+        for strategy in user.strategies:
+            if strategy.strategy_config.strategy_id == strategy_id:
+                return strategy
+        return None
+
+    def update_strategy_symbols(self, chat_id: int, strategy_id: str, symbols: List[str]):
+        """更新策略的监控品种"""
+        strategy = self.get_strategy(chat_id, strategy_id)
+        if strategy:
+            strategy.symbols = symbols
+            self._save()
+
+    def update_strategy_periods(self, chat_id: int, strategy_id: str, periods: List[str]):
+        """更新策略的监控周期"""
+        strategy = self.get_strategy(chat_id, strategy_id)
+        if strategy:
+            strategy.periods = periods
+            self._save()
+
+    def update_strategy_enabled(self, chat_id: int, strategy_id: str, enabled: bool):
+        """更新策略的启用状态"""
+        strategy = self.get_strategy(chat_id, strategy_id)
+        if strategy:
+            strategy.enabled = enabled
+            self._save()
+
+    def get_predefined_strategies(self) -> Dict[str, Any]:
+        """获取预定义策略配置"""
+        return self.PREDEFINED_STRATEGIES.copy()
 
 
 # 全局配置函数（延迟加载）
