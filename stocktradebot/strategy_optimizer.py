@@ -10,20 +10,16 @@ from typing import Dict, List, Optional, Union, Callable
 import logging
 import itertools
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from functools import partial
 import pandas as pd
 
 from .combination_strategies import (
     CombinationStrategies,
     CombinationStrategy,
     StrategyType,
-    StrategyParameter,
     StrategyConfig,
     StrategyPerformance,
     StrategyStatus
 )
-from .signal_aggregator import AggregationStrategy
-from .multi_timeframe import TimeframeType
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ import sys
 import asyncio
 import logging
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytz
 
@@ -694,7 +694,6 @@ class StockMonitor:
                 signal_time = missed_signal["timestamp"]
 
                 # 格式化消息
-                msg_df = df.copy()
                 # 暂时修改df的最后一行为信号时间的数据，用于格式化消息
                 signal_idx = missed_signal.get("idx", len(df) - 1)
                 if 0 <= signal_idx < len(df):

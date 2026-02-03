@@ -730,7 +730,6 @@ class CombinationStrategies:
                 capital = 0
             elif signal.signal_type == SignalType.BEARISH and position > 0:
                 # 卖出
-                profit = position * price
                 profit_pct = (price - entry_price) / entry_price * 100
                 trades.append(profit_pct)
                 capital = position * price
@@ -739,7 +738,6 @@ class CombinationStrategies:
         # 最终结算
         if position > 0 and "close" in df.columns:
             final_price = df["close"].iloc[-1]
-            profit = position * final_price
             profit_pct = (final_price - entry_price) / entry_price * 100
             trades.append(profit_pct)
             capital = position * final_price

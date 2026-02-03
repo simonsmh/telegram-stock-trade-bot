@@ -4,7 +4,6 @@ Telegram Bot 模块
 """
 
 import logging
-from datetime import datetime
 from telegram import Update
 from telegram.helpers import escape_markdown
 from telegram.ext import (
